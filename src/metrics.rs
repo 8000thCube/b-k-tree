@@ -15,11 +15,6 @@ impl Hamming{
 		Self{_seal:()}
 	}
 }
-impl LevIter for &str{
-	fn lev_iter(&self)->Self::Iter<'_>{self.chars()}
-	type Item<'a>=char where Self:'a;
-	type Iter<'a>=Chars<'a> where Self:'a;
-}
 impl LevIter for String{
 	fn lev_iter(&self)->Self::Iter<'_>{self.chars()}
 	type Item<'a>=char;
@@ -36,7 +31,17 @@ impl Levenshtein{
 		Self{cache:Arc::new(Mutex::new(Vec::new()))}
 	}
 }
+impl<E:Eq,const N:usize> LevIter for [E;N]{
+	fn lev_iter(&self)->Self::Iter<'_>{self.iter()}
+	type Item<'a>=&'a E where E:'a;
+	type Iter<'a>=SliceIter<'a,E> where Self:'a;
+}
 impl<E:Eq> LevIter for [E]{
+	fn lev_iter(&self)->Self::Iter<'_>{self.iter()}
+	type Item<'a>=&'a E where E:'a;
+	type Iter<'a>=SliceIter<'a,E> where Self:'a;
+}
+impl<E:Eq> LevIter for Vec<E>{
 	fn lev_iter(&self)->Self::Iter<'_>{self.iter()}
 	type Item<'a>=&'a E where E:'a;
 	type Iter<'a>=SliceIter<'a,E> where Self:'a;
@@ -57,10 +62,12 @@ impl<F:Add<Output=F>+Copy+Into<f64>+Mul<Output=F>,V:?Sized> DiscreteMetric<V> fo
 }
 impl<T:?Sized+LevIter> LevenshteinDistance for T{
 	fn levenshtein_distance(&self,distances:&mut Vec<usize>,other:&Self)->usize{
-		for (n,_x) in self.lev_iter().enumerate(){
-			distances.push(n+1);
+		let len=self.levenshtein_len();
+
+		if len==0{return other.levenshtein_len()}
+		for n in distances.len()..len{
+			distances.push(if n>0{distances[n-1]+1}else{1});
 		}
-		if distances.len()==0{return other.lev_iter().count()}
 		for (k,y) in other.lev_iter().enumerate(){
 			let mut diagonal=k;
 			let mut left=k+1;
@@ -74,13 +81,22 @@ impl<T:?Sized+LevIter> LevenshteinDistance for T{
 		}
 		*distances.last().unwrap()
 	}
+	fn levenshtein_len(&self)->usize{self.lev_iter().count()}
 }
 impl<V:LevenshteinDistance+?Sized> DiscreteMetric<V> for Levenshtein{
 	fn distance(&self,x:&V,y:&V)->usize{
+		let (mut x,mut y)=(x,y);
+		let (mut xl,mut yl)=(x.levenshtein_len(),y.levenshtein_len());
+		if x.levenshtein_len()>y.levenshtein_len(){
+			swap(&mut x,&mut y);
+			swap(&mut xl,&mut yl);
+		}
+
 		let mut cache=self.cache.try_lock();
-		let mut distances:Vec<usize>=if let Ok(c)=&mut cache{take(&mut *c)}else{Vec::with_capacity(10)};
+		let mut distances:Vec<usize>=if let Ok(c)=&mut cache{take(&mut *c)}else{Vec::new()};
 
 		distances.clear();
+		distances.reserve(xl);
 		let distance=x.levenshtein_distance(&mut distances,y);
 		if let Ok(c)=&mut cache{**c=distances}
 		distance
@@ -112,12 +128,14 @@ pub struct Hamming{_seal:()}
 pub struct Levenshtein{cache:Arc<Mutex<Vec<usize>>>}
 /// trait for levenshtein distance compatibility
 pub trait LevenshteinDistance{
-	/// computes the distance given the starter distances and other string
+	/// computes the distance given and other string its initial distances to substrings of self
 	fn levenshtein_distance(&self,distances:&mut Vec<usize>,other:&Self)->usize;
+	/// returns the string length to be used for lev distance purposes
+	fn levenshtein_len(&self)->usize;
 }
 /// trait for computing levenshtein distance by iteration
 pub trait LevIter{
-	/// returns an iterator for comparing characters in a levenshtein distance
+	/// returns an iterator for comparing characters in a levenshtein distance. It shouldn't change length or sequence without self being mutated
 	fn lev_iter(&self)->Self::Iter<'_>;
 	/// the item type
 	type Item<'a>:Eq where Self:'a;
