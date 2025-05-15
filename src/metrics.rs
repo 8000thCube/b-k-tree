@@ -15,11 +15,31 @@ impl Hamming{
 		Self{_seal:()}
 	}
 }
+impl LevIter for &str{
+	fn lev_iter(&self)->Self::Iter<'_>{self.chars()}
+	type Item<'a>=char where Self:'a;
+	type Iter<'a>=Chars<'a> where Self:'a;
+}
+impl LevIter for String{
+	fn lev_iter(&self)->Self::Iter<'_>{self.chars()}
+	type Item<'a>=char;
+	type Iter<'a>=Chars<'a> where Self:'a;
+}
+impl LevIter for str{
+	fn lev_iter(&self)->Self::Iter<'_>{self.chars()}
+	type Item<'a>=char;
+	type Iter<'a>=Chars<'a> where Self:'a;
+}
 impl Levenshtein{
 	/// creates a new levenshtein distance metric
 	pub fn new()->Self{
 		Self{cache:Arc::new(Mutex::new(Vec::new()))}
 	}
+}
+impl<E:Eq> LevIter for [E]{
+	fn lev_iter(&self)->Self::Iter<'_>{self.iter()}
+	type Item<'a>=&'a E where E:'a;
+	type Iter<'a>=SliceIter<'a,E> where Self:'a;
 }
 impl<F:Add<Output=F>+Copy+Into<f64>+Mul<Output=F>,V:?Sized> DiscreteMetric<V> for CeilL2 where for<'a><&'a V as IntoIterator>::Item:Sub<Output=F>,for<'a>&'a V:IntoIterator{
 	fn distance(&self,x:&V,y:&V)->usize{
@@ -35,29 +55,33 @@ impl<F:Add<Output=F>+Copy+Into<f64>+Mul<Output=F>,V:?Sized> DiscreteMetric<V> fo
 		((r2.sqrt()/factor).ceil()*factor) as usize
 	}
 }
-impl<V:AsRef<str>+?Sized> DiscreteMetric<V> for Levenshtein{
-	fn distance(&self,x:&V,y:&V)->usize{
-		let (mut x,mut y)=(x.as_ref(),y.as_ref());
-		if x.len()>y.len(){swap(&mut x,&mut y)}
-		let mut cache=self.cache.try_lock();
-		let mut distances:Vec<usize>=if let Ok(c)=&mut cache{take(&mut *c)}else{Vec::with_capacity(x.len()+1)};
-
-		distances.clear();
-		for (n,_x) in x.chars().enumerate(){
+impl<T:?Sized+LevIter> LevenshteinDistance for T{
+	fn levenshtein_distance(&self,distances:&mut Vec<usize>,other:&Self)->usize{
+		for (n,_x) in self.lev_iter().enumerate(){
 			distances.push(n+1);
 		}
-		for (k,y) in y.chars().enumerate(){
+		if distances.len()==0{return other.lev_iter().count()}
+		for (k,y) in other.lev_iter().enumerate(){
 			let mut diagonal=k;
 			let mut left=k+1;
 			let mut up;
-			for (n,x) in x.chars().enumerate(){
+			for (n,x) in self.lev_iter().enumerate(){
 				up=distances[n];
 				let d=(diagonal+if x==y{0}else{1}).min(left+1).min(up+1);
 				(diagonal,left)=(up,d);
 				distances[n]=d;
 			}
 		}
-		let distance=*distances.last().unwrap_or(&y.len());
+		*distances.last().unwrap()
+	}
+}
+impl<V:LevenshteinDistance+?Sized> DiscreteMetric<V> for Levenshtein{
+	fn distance(&self,x:&V,y:&V)->usize{
+		let mut cache=self.cache.try_lock();
+		let mut distances:Vec<usize>=if let Ok(c)=&mut cache{take(&mut *c)}else{Vec::with_capacity(10)};
+
+		distances.clear();
+		let distance=x.levenshtein_distance(&mut distances,y);
 		if let Ok(c)=&mut cache{**c=distances}
 		distance
 	}
@@ -86,9 +110,23 @@ pub struct Hamming{_seal:()}
 #[derive(Clone,Debug,Default)]
 /// levenshtein distance metric for strings
 pub struct Levenshtein{cache:Arc<Mutex<Vec<usize>>>}
+/// trait for levenshtein distance compatibility
+pub trait LevenshteinDistance{
+	/// computes the distance given the starter distances and other string
+	fn levenshtein_distance(&self,distances:&mut Vec<usize>,other:&Self)->usize;
+}
+/// trait for computing levenshtein distance by iteration
+pub trait LevIter{
+	/// returns an iterator for comparing characters in a levenshtein distance
+	fn lev_iter(&self)->Self::Iter<'_>;
+	/// the item type
+	type Item<'a>:Eq where Self:'a;
+	/// the iterator type
+	type Iter<'a>:Iterator<Item=Self::Item<'a>> where Self:'a;
+}
 use {
 	crate::DiscreteMetric,
 	std::{
-		cmp::Eq,mem::{swap,take},ops::{Add,Mul,Sub},sync::{Arc,Mutex}
+		cmp::Eq,mem::{swap,take},ops::{Add,Mul,Sub},slice::Iter as SliceIter,str::Chars,sync::{Arc,Mutex}
 	}
 };
