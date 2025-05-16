@@ -1,6 +1,10 @@
 [package]
-name = "b-k-tree"
-version = "0.1.0"
+authors = ["Aili Nierengarten" <aili.nierengarten@gmail.com>]
+description = "Burkhard-Keller tree data structure for finding items separated by a small discrete distance"
 edition = "2024"
+name = "b-k-tree"
+license = "MIT"
+version = "0.1.0"
+repository = "https://github.com/8000thCube/b-k-tree"
 
 [dependencies]
