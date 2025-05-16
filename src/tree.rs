@@ -48,6 +48,16 @@ impl<'a,K,M,Q:Clone,V> Clone for CloseValIter<'a,K,M,Q,V>{
 	}
 	fn clone_from(&mut self,other:&Self){self.inner.clone_from(&other.inner)}
 }
+impl<'a,K,M,V> IntoIterator for &'a BKTreeMap<K,M,V>{
+	fn into_iter(self)->Self::IntoIter{self.iter()}
+	type IntoIter=MapIter<'a,K,V>;
+	type Item=(&'a K,&'a V);
+}
+impl<'a,K,M,V> IntoIterator for &'a mut BKTreeMap<K,M,V>{
+	fn into_iter(self)->Self::IntoIter{self.iter_mut()}
+	type IntoIter=MapIterMut<'a,K,V>;
+	type Item=(&'a K,&'a mut V);
+}
 impl<'a,K,V> Clone for KeyIter<'a,K,V>{
 	fn clone(&self)->Self{
 		Self{inner:self.inner.clone()}
@@ -75,6 +85,9 @@ impl<'a,K,V> ExactSizeIterator for KeyIter<'a,K,V>{
 impl<'a,K,V> ExactSizeIterator for MapIter<'a,K,V>{
 	fn len(&self)->usize{self.remaining}
 }
+impl<'a,K,V> ExactSizeIterator for MapIterMut<'a,K,V>{
+	fn len(&self)->usize{self.remaining}
+}
 impl<'a,K,V> ExactSizeIterator for ValIter<'a,K,V>{
 	fn len(&self)->usize{self.inner.len()}
 }
@@ -96,10 +109,28 @@ impl<'a,K,V> Iterator for MapIter<'a,K,V>{
 	fn size_hint(&self)->(usize,Option<usize>){(self.remaining,Some(self.remaining))}
 	type Item=(&'a K,&'a V);
 }
+impl<'a,K,V> Iterator for MapIterMut<'a,K,V>{
+	fn next(&mut self)->Option<Self::Item>{
+		let nodes=&mut self.nodes;
+		let node=nodes.pop()?;
+		let (k,v,next)=(&node.key,&mut node.value,&mut node.connections);
+		self.remaining-=1;
+
+		nodes.extend(next.values_mut());
+		Some((k,v))
+	}
+	fn size_hint(&self)->(usize,Option<usize>){(self.remaining,Some(self.remaining))}
+	type Item=(&'a K,&'a mut V);
+}
 impl<'a,K,V> Iterator for ValIter<'a,K,V>{
 	fn next(&mut self)->Option<Self::Item>{self.inner.next().map(|(_k,v)|v)}
 	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
 	type Item=&'a V;
+}
+impl<'a,K,V> Iterator for ValIterMut<'a,K,V>{
+	fn next(&mut self)->Option<Self::Item>{self.inner.next().map(|(_k,v)|v)}
+	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
+	type Item=&'a mut V;
 }
 impl<'a,M:DiscreteMetric<Q>,Q,T:Borrow<Q>> Iterator for CloseSetIter<'a,M,Q,T>{
 	fn next(&mut self)->Option<Self::Item>{self.inner.next()}
@@ -111,6 +142,13 @@ impl<'a,M,Q:Clone,T> Clone for CloseSetIter<'a,M,Q,T>{
 		Self{inner:self.inner.clone()}
 	}
 	fn clone_from(&mut self,other:&Self){self.inner.clone_from(&other.inner)}
+}
+impl<'a,T,M> IntoIterator for &'a BKTreeSet<T,M>{
+	fn into_iter(self)->Self::IntoIter{
+		SetIter{inner:self.inner.keys()}
+	}
+	type IntoIter=SetIter<'a,T>;
+	type Item=&'a T;
 }
 impl<'a,T> Clone for SetIter<'a,T>{
 	fn clone(&self)->Self{
@@ -125,6 +163,27 @@ impl<'a,T> Iterator for SetIter<'a,T>{
 	fn next(&mut self)->Option<Self::Item>{self.inner.next()}
 	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
 	type Item=&'a T;
+}
+impl<K:Clone,V:Clone> Clone for IntoKeysIter<K,V>{
+	fn clone(&self)->Self{//TODO this theoretically could avoid cloning the values
+		Self{inner:self.inner.clone()}
+	}
+	fn clone_from(&mut self,other:&Self){self.inner.clone_from(&other.inner)}
+}
+impl<K:Clone,V:Clone> Clone for IntoValsIter<K,V>{
+	fn clone(&self)->Self{//TODO this theoretically could avoid cloning the keys
+		Self{inner:self.inner.clone()}
+	}
+	fn clone_from(&mut self,other:&Self){self.inner.clone_from(&other.inner)}
+}
+impl<K:Clone,V:Clone> Clone for MapIntoIter<K,V>{
+	fn clone(&self)->Self{
+		Self{nodes:self.nodes.clone(),remaining:self.remaining}
+	}
+	fn clone_from(&mut self,other:&Self){
+		self.nodes.clone_from(&other.nodes);
+		self.remaining=other.remaining;
+	}
 }
 impl<K,M:Default+DiscreteMetric<K>,V> FromIterator<(K,V)> for BKTreeMap<K,M,V>{
 	fn from_iter<I:IntoIterator<Item=(K,V)>>(iter:I)->Self{
@@ -186,6 +245,8 @@ impl<K,M,V> BKTreeMap<K,M,V>{
 		results.sort_unstable_by_key(|(_k,_v,d)|*d);
 		results
 	}
+	/// tests if a key at most maxdistance from the given key is in the map
+	pub fn contains_key<Q:?Sized>(&self,key:&Q,maxdistance:usize)->bool where K:Borrow<Q>,M:DiscreteMetric<Q>{self.get_key_value(key,maxdistance).is_some()}
 	/// gets the value whose key is closest to the given key, or None if the map contains no key at most max distance from the given key. If there are multiple closest keys, exactly which is returned is unspecified
 	pub fn get<Q:?Sized>(&self,key:&Q,maxdistance:usize)->Option<(&V,usize)> where K:Borrow<Q>,M:DiscreteMetric<Q>{self.get_key_value(key,maxdistance).map(|(_k,v,d)|(v,d))}
 	/// gets the key value pair and distance whose key is closest to the given key, or None if the map contains no key at most max distance from the given key. If there are multiple closest keys, exactly which is returned is unspecified
@@ -218,7 +279,7 @@ impl<K,M,V> BKTreeMap<K,M,V>{
 
 		explore(key,maxdistance,metric,root).map(|(n,_d)|n)
 	}
-	/// inserts a key-value pair into the map, returning the previous value at that key, or None if there was no previous value. If the old value is returned the key is not updated.
+	/// inserts a key-value pair into the map, returning the previous value at that key, or None if there was no previous value. Keys are considered equal if the the distance between them is 0. If the old value is returned the key is not updated.
 	pub fn insert(&mut self,key:K,value:V)->Option<V> where M:DiscreteMetric<K>{
 		let metric=&self.metric;
 		let mut node=if let Some(n)=self.root.as_mut(){
@@ -238,11 +299,23 @@ impl<K,M,V> BKTreeMap<K,M,V>{
 		self.length+=1;
 		None
 	}
+	/// makes an iterator over the keys
+	pub fn into_keys(self)->IntoKeysIter<K,V>{
+		IntoKeysIter{inner:self.into_iter()}
+	}
+	/// makes an iterator over the values
+	pub fn into_values(self)->IntoValsIter<K,V>{
+		IntoValsIter{inner:self.into_iter()}
+	}
 	/// returns true if the map contains no entries
 	pub fn is_empty(&self)->bool{self.length==0}
 	/// makes an iterator over the mappings
 	pub fn iter(&self)->MapIter<'_,K,V>{
 		MapIter{nodes:self.root.as_ref().into_iter().collect(),remaining:self.length}
+	}
+	/// makes an iterator over the mappings
+	pub fn iter_mut(&mut self)->MapIterMut<'_,K,V>{
+		MapIterMut{nodes:self.root.as_mut().into_iter().collect(),remaining:self.length}
 	}
 	/// makes an iterator over the keys
 	pub fn keys(&self)->KeyIter<'_,K,V>{
@@ -254,16 +327,99 @@ impl<K,M,V> BKTreeMap<K,M,V>{
 	pub fn new(metric:M)->Self{
 		Self{length:0,metric,root:None}
 	}
+	/// removes the closest mapping whose key at most maxdistance from the given key. If there are multiple closest keys, exactly which is removed is unspecified
+	pub fn remove_entry<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Option<(K,V,usize)> where K:Borrow<Q>,M:DiscreteMetric<K>+DiscreteMetric<Q>{
+		fn explore<'a,K:Borrow<Q>,M:DiscreteMetric<Q>,Q:?Sized,V>(key:&Q,maxdistance:usize,metric:&M,node:&'a mut Node<K,V>)->Option<(Result<(&'a mut BTreeMap<usize,Node<K,V>>,usize),&'a mut Node<K,V>>,usize)>{
+			let distance=metric.distance(key,node.key.borrow());
+
+			let includecurrent=distance<=maxdistance;
+			let (nextnode,d,i)=if let Some(n)=node.connections.range_mut(distance.saturating_sub(maxdistance)..=distance.saturating_add(maxdistance)).filter_map(|(index,n)|{
+				let (node,distance)=explore(key,maxdistance,metric,n)?;
+
+				Some((node,distance,*index))
+			}).min_by_key(|(_n,d,_i)|*d){
+				n
+			}else{
+				return includecurrent.then_some((Err(node),distance))
+			};
+			Some(if distance<d{(Err(node),distance)}else{(Ok((&mut node.connections,i)),d)})
+		}
+		fn restore_nodes<K,M:DiscreteMetric<K>,V>(nodes:BTreeMap<usize,Node<K,V>>,tree:&mut BKTreeMap<K,M,V>){
+			nodes.into_values().for_each(|n|{
+				let (key,value,next)=(n.key,n.value,n.connections);
+
+				if tree.insert(key,value).is_none(){tree.length-=1}
+				restore_nodes(next,tree);
+			});
+		}
+		let metric=&self.metric;
+		let root=self.root.as_mut()?;
+		let (node,distance)=explore(key,maxdistance,metric,root)?;
+		let node=match node{Err(node)=>self.root.take(),Ok((subtree,index))=>subtree.remove(&index)}.unwrap();
+		let (key,value,torestore)=(node.key,node.value,node.connections);
+
+		restore_nodes(torestore,self);
+		Some((key,value,distance))
+	}
 	/// makes an iterator over the values
 	pub fn values(&self)->ValIter<'_,K,V>{
 		ValIter{inner:self.iter()}
 	}
+	/// makes an iterator over the values
+	pub fn values_mut(&mut self)->ValIterMut<'_,K,V>{
+		ValIterMut{inner:self.iter_mut()}
+	}
+}
+impl<K,M,V> IntoIterator for BKTreeMap<K,M,V>{
+	fn into_iter(self)->Self::IntoIter{
+		MapIntoIter{nodes:self.root.into_iter().collect(),remaining:self.length}
+	}
+	type IntoIter=MapIntoIter<K,V>;
+	type Item=(K,V);
+}
+impl<K,V> ExactSizeIterator for IntoKeysIter<K,V>{
+	fn len(&self)->usize{self.inner.len()}
+}
+impl<K,V> ExactSizeIterator for IntoValsIter<K,V>{
+	fn len(&self)->usize{self.inner.len()}
+}
+impl<K,V> ExactSizeIterator for MapIntoIter<K,V>{
+	fn len(&self)->usize{self.remaining}
+}
+impl<K,V> Iterator for IntoKeysIter<K,V>{
+	fn next(&mut self)->Option<Self::Item>{self.inner.next().map(|(k,_v)|k)}
+	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
+	type Item=K;
+}
+impl<K,V> Iterator for IntoValsIter<K,V>{
+	fn next(&mut self)->Option<Self::Item>{self.inner.next().map(|(_k,v)|v)}
+	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
+	type Item=V;
+}
+impl<K,V> Iterator for MapIntoIter<K,V>{
+	fn next(&mut self)->Option<Self::Item>{
+		let nodes=&mut self.nodes;
+		let node=nodes.pop()?;
+		let (k,v,next)=(node.key,node.value,node.connections);
+		self.remaining-=1;
+
+		nodes.extend(next.into_values());
+		Some((k,v))
+	}
+	fn size_hint(&self)->(usize,Option<usize>){(self.remaining,Some(self.remaining))}
+	type Item=(K,V);
 }
 impl<K,V> Node<K,V>{
 	/// creates a new node
 	fn new(key:K,value:V)->Self{
 		Self{connections:BTreeMap::new(),key,value}
 	}
+}
+impl<T:Clone> Clone for SetIntoIter<T>{
+	fn clone(&self)->Self{
+		Self{inner:self.inner.clone()}
+	}
+	fn clone_from(&mut self,other:&Self){self.inner.clone_from(&other.inner)}
 }
 impl<T,M:Default> Default for BKTreeSet<T,M>{
 	fn default()->Self{Self::new(M::default())}
@@ -279,7 +435,7 @@ impl<T,M> BKTreeSet<T,M>{
 		CloseSetIter{inner:self.inner.close_keys(key,maxdistance)}
 	}
 	/// tests if the set contains an element within max distance of the key
-	pub fn contains<Q:?Sized>(&self,key:&Q,maxdistance:usize)->bool where M:DiscreteMetric<Q>,T:Borrow<Q>{self.inner.get_key_value(key,maxdistance).is_some()}
+	pub fn contains<Q:?Sized>(&self,key:&Q,maxdistance:usize)->bool where M:DiscreteMetric<Q>,T:Borrow<Q>{self.inner.contains_key(key,maxdistance)}
 	/// returns a reference to the element in the set that is closest to the key within max distance, or None if the set contains no element at most max distance from the given element. If there are multiple closest elements, exactly which is returned is unspecified
 	pub fn get<Q:?Sized>(&self,key:&Q,maxdistance:usize)->Option<(&T,usize)> where M:DiscreteMetric<Q>,T:Borrow<Q>{self.inner.get_key_value(key,maxdistance).map(|(k,_v,d)|(k,d))}
 	/// inserts
@@ -296,6 +452,21 @@ impl<T,M> BKTreeSet<T,M>{
 	pub fn iter(&self)->SetIter<'_,T>{
 		SetIter{inner:self.inner.keys()}
 	}
+}
+impl<T,M> IntoIterator for BKTreeSet<T,M>{
+	fn into_iter(self)->Self::IntoIter{
+		SetIntoIter{inner:self.inner.into_keys()}
+	}
+	type IntoIter=SetIntoIter<T>;
+	type Item=T;
+}
+impl<T> ExactSizeIterator for SetIntoIter<T>{
+	fn len(&self)->usize{self.inner.len()}
+}
+impl<T> Iterator for SetIntoIter<T>{
+	fn next(&mut self)->Option<Self::Item>{self.inner.next()}
+	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
+	type Item=T;
 }
 #[cfg(test)]
 mod tests{
@@ -449,7 +620,7 @@ mod tests{
 pub struct BKTreeMap<K,M,V>{length:usize,metric:M,root:Option<Node<K,V>>}
 #[derive(Clone,Debug)]
 /// a set for quickly finding items separated by a small discrete distance
-pub struct BKTreeSet<T,M>{inner:BKTreeMap<T,M,()>}
+pub struct BKTreeSet<T,M>{inner:BKTreeMap<T,M,()>}//TODO switch order of T and M because the non alphabeticalness is confusing
 #[derive(Debug)]
 /// iterator over keys close to some key
 pub struct CloseKeyIter<'a,K,M,Q,V>{inner:CloseMapIter<'a,K,M,Q,V>}
@@ -464,17 +635,35 @@ pub struct CloseSetIter<'a,M,Q,T>{inner:CloseKeyIter<'a,T,M,Q,()>}
 pub struct CloseValIter<'a,K,M,Q,V>{inner:CloseMapIter<'a,K,M,Q,V>}
 #[derive(Debug)]
 /// iterator over the keys in the tree
+pub struct IntoKeysIter<K,V>{inner:MapIntoIter<K,V>}
+#[derive(Debug)]
+/// iterator over the keys in the tree
+pub struct IntoValsIter<K,V>{inner:MapIntoIter<K,V>}
+#[derive(Debug)]
+/// iterator over the keys in the tree
 pub struct KeyIter<'a,K,V>{inner:MapIter<'a,K,V>}
 #[derive(Debug)]
 /// iterator over the mappings in the tree
 pub struct MapIter<'a,K,V>{nodes:Vec<&'a Node<K,V>>,remaining:usize}
+#[derive(Debug)]
+/// iterator over the mappings in the tree
+pub struct MapIntoIter<K,V>{nodes:Vec<Node<K,V>>,remaining:usize}
+#[derive(Debug)]
+/// iterator over the mappings in the tree
+pub struct MapIterMut<'a,K,V>{nodes:Vec<&'a mut Node<K,V>>,remaining:usize}
+#[derive(Debug)]
+/// iterator over the items in the tree
+pub struct SetIntoIter<T>{inner:IntoKeysIter<T,()>}
 #[derive(Debug)]
 /// iterator over the items in the tree
 pub struct SetIter<'a,T>{inner:KeyIter<'a,T,()>}
 #[derive(Debug)]
 /// iterator over the values in the tree
 pub struct ValIter<'a,K,V>{inner:MapIter<'a,K,V>}
-/// a discrete distance metric. It should obey the usual axioms of a metric space
+#[derive(Debug)]
+/// iterator over the values in the tree
+pub struct ValIterMut<'a,K,V>{inner:MapIterMut<'a,K,V>}
+/// a discrete distance metric. It should obey the usual axioms of a metric space. An invalid metric will probably cause unexpected behaviors
 pub trait DiscreteMetric<T:?Sized>{
 	/// computes the distance between two elements of the metric space
 	fn distance(&self,x:&T,y:&T)->usize;
