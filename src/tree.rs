@@ -443,9 +443,9 @@ impl<T,M> BKTreeSet<T,M>{
 	pub fn get<Q:?Sized>(&self,key:&Q,maxdistance:usize)->Option<(&T,usize)> where M:DiscreteMetric<Q>,T:Borrow<Q>{self.inner.get_key_value(key,maxdistance).map(|(k,_v,d)|(k,d))}
 	/// inserts
 	pub fn insert(&mut self,value:T)->bool where M:DiscreteMetric<T>{self.inner.insert(value,()).is_none()}
-	/// returns true if the set contains no entries
+	/// returns true if the set contains no elements
 	pub fn is_empty(&self)->bool{self.inner.is_empty()}
-	/// returns the number of entries in the set
+	/// returns the number of elements in the set
 	pub fn len(&self)->usize{self.inner.len()}
 	/// creates a new tree
 	pub fn new(metric:M)->Self{
@@ -456,7 +456,9 @@ impl<T,M> BKTreeSet<T,M>{
 		SetIter{inner:self.inner.keys()}
 	}
 	/// removes an item from the tree
-	pub fn remove<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Option<(T,usize)> where T:Borrow<Q>,M:DiscreteMetric<Q>+DiscreteMetric<T>{self.inner.remove_entry(key,maxdistance).map(|(k,_v,d)|(k,d))}
+	pub fn remove<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->bool where T:Borrow<Q>,M:DiscreteMetric<Q>+DiscreteMetric<T>{self.inner.remove_entry(key,maxdistance).is_some()}
+	/// removes an item from the tree
+	pub fn take<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Option<(T,usize)> where T:Borrow<Q>,M:DiscreteMetric<Q>+DiscreteMetric<T>{self.inner.remove_entry(key,maxdistance).map(|(k,_v,d)|(k,d))}
 }
 impl<T,M> IntoIterator for BKTreeSet<T,M>{
 	fn into_iter(self)->Self::IntoIter{
