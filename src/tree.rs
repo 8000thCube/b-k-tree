@@ -328,6 +328,8 @@ impl<K,M,V> BKTreeMap<K,M,V>{
 		Self{length:0,metric,root:None}
 	}
 	/// removes the closest mapping whose key at most maxdistance from the given key. If there are multiple closest keys, exactly which is removed is unspecified
+	pub fn remove<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Option<(V,usize)> where K:Borrow<Q>,M:DiscreteMetric<K>+DiscreteMetric<Q>{self.remove_entry(key,maxdistance).map(|(_k,v,d)|(v,d))}
+	/// removes the closest mapping whose key at most maxdistance from the given key. If there are multiple closest keys, exactly which is removed is unspecified
 	pub fn remove_entry<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Option<(K,V,usize)> where K:Borrow<Q>,M:DiscreteMetric<K>+DiscreteMetric<Q>{
 		fn explore<'a,K:Borrow<Q>,M:DiscreteMetric<Q>,Q:?Sized,V>(key:&Q,maxdistance:usize,metric:&M,node:&'a mut Node<K,V>)->Option<(Result<(&'a mut BTreeMap<usize,Node<K,V>>,usize),&'a mut Node<K,V>>,usize)>{
 			let distance=metric.distance(key,node.key.borrow());
@@ -342,7 +344,7 @@ impl<K,M,V> BKTreeMap<K,M,V>{
 			}else{
 				return includecurrent.then_some((Err(node),distance))
 			};
-			Some(if distance<d{(Err(node),distance)}else{(Ok((&mut node.connections,i)),d)})
+			Some(if distance<d{(Err(node),distance)}else if let Ok((_subtree,subindex))=nextnode{(Ok((&mut node.connections.get_mut(&i).unwrap().connections,subindex)),d)}else{(Ok((&mut node.connections,i)),d)})
 		}
 		fn restore_nodes<K,M:DiscreteMetric<K>,V>(nodes:BTreeMap<usize,Node<K,V>>,tree:&mut BKTreeMap<K,M,V>){
 			nodes.into_values().for_each(|n|{
@@ -358,6 +360,7 @@ impl<K,M,V> BKTreeMap<K,M,V>{
 		let node=match node{Err(node)=>self.root.take(),Ok((subtree,index))=>subtree.remove(&index)}.unwrap();
 		let (key,value,torestore)=(node.key,node.value,node.connections);
 
+		self.length-=1;
 		restore_nodes(torestore,self);
 		Some((key,value,distance))
 	}
@@ -495,6 +498,58 @@ mod tests{
 		assert_eq!(map.get_key_value(&(-1,3),0),None);
 		assert_eq!(map.get_key_value(&(2,-1),0),None);
 		assert_eq!(map.get_key_value(&(2,1),0),None);
+
+		assert_eq!(map.get_key_value(&(-1,-2),1),Some((&(-1,-1),&'a',1)));
+		assert_eq!(map.get_key_value(&(-1,3),1),Some((&(-1,2),&'b',1)));
+		assert_eq!(map.get_key_value(&(2,-1),1),Some((&(1,-1),&'c',1)));
+		assert_eq!(map.get_key_value(&(2,2),1),Some((&(1,2),&'d',1)));
+	}
+	#[test]
+	fn insert_remove_rectangle(){
+		let mut map=BKTreeMap::new(Cheb2D);
+
+		assert_eq!(map.insert((-1,-1),'A'),None);
+		assert_eq!(map.insert((-1,2),'B'),None);
+		assert_eq!(map.insert((1,-1),'C'),None);
+		assert_eq!(map.insert((1,2),'D'),None);
+
+		assert_eq!(map.remove(&(-1,2),0),Some(('B',0)));
+		assert_eq!(map.len(),3);
+		assert_eq!(map.remove(&(1,2),0),Some(('D',0)));
+		assert_eq!(map.len(),2);
+		assert_eq!(map.remove(&(1,-1),0),Some(('C',0)));
+		assert_eq!(map.len(),1);
+		assert_eq!(map.remove(&(-1,-1),0),Some(('A',0)));
+		assert_eq!(map.len(),0);
+
+		for n in 0..10{
+			assert_eq!(map.insert((-1,-1),'a'),None);
+			assert_eq!(map.insert((-1,2),'b'),None);
+			assert_eq!(map.insert((1,-1),'c'),None);
+			assert_eq!(map.insert((1,2),'d'),None);
+			assert_eq!(map.len(),4);
+
+			assert_eq!(map.remove(&(-1,-1),n),Some(('a',0)));
+			assert_eq!(map.get_key_value(&(-1,3),1),Some((&(-1,2),&'b',1)));
+			assert_eq!(map.get_key_value(&(2,-1),1),Some((&(1,-1),&'c',1)));
+			assert_eq!(map.remove(&(-1,2),n),Some(('b',0)));
+			assert_eq!(map.len(),2);
+			assert_eq!(map.remove(&(1,-1),n),Some(('c',0)));
+			assert_eq!(map.len(),1);
+			assert_eq!(map.remove(&(1,2),n),Some(('d',0)));
+		}
+
+		assert_eq!(map.insert((-1,-1),'a'),None);
+		assert_eq!(map.insert((-1,2),'b'),None);
+		assert_eq!(map.insert((1,-1),'c'),None);
+		assert_eq!(map.insert((1,2),'d'),None);
+		assert_eq!(map.len(),4);
+
+		assert_eq!(map.remove(&(-1,-2),0),None);
+		assert_eq!(map.remove(&(-1,3),0),None);
+		assert_eq!(map.remove(&(2,-1),0),None);
+		assert_eq!(map.remove(&(2,1),0),None);
+		assert_eq!(map.len(),4);
 
 		assert_eq!(map.get_key_value(&(-1,-2),1),Some((&(-1,-1),&'a',1)));
 		assert_eq!(map.get_key_value(&(-1,3),1),Some((&(-1,2),&'b',1)));
