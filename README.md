@@ -23,6 +23,7 @@ use {
 	b_k_tree::{BKTreeSet,metrics::CeilL2},std::{collections::HashSet}
 };
 ```
+```
 output:
 ```
 ([-1.6, 1.1], [-1.6, 1.6])
