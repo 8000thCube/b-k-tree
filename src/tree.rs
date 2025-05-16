@@ -357,7 +357,7 @@ impl<K,M,V> BKTreeMap<K,M,V>{
 		let metric=&self.metric;
 		let root=self.root.as_mut()?;
 		let (node,distance)=explore(key,maxdistance,metric,root)?;
-		let node=match node{Err(node)=>self.root.take(),Ok((subtree,index))=>subtree.remove(&index)}.unwrap();
+		let node=match node{Err(_)=>self.root.take(),Ok((subtree,index))=>subtree.remove(&index)}.unwrap();
 		let (key,value,torestore)=(node.key,node.value,node.connections);
 
 		self.length-=1;
@@ -455,6 +455,8 @@ impl<T,M> BKTreeSet<T,M>{
 	pub fn iter(&self)->SetIter<'_,T>{
 		SetIter{inner:self.inner.keys()}
 	}
+	/// removes an item from the tree
+	pub fn remove<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Option<(T,usize)> where T:Borrow<Q>,M:DiscreteMetric<Q>+DiscreteMetric<T>{self.inner.remove_entry(key,maxdistance).map(|(k,_v,d)|(k,d))}
 }
 impl<T,M> IntoIterator for BKTreeSet<T,M>{
 	fn into_iter(self)->Self::IntoIter{
