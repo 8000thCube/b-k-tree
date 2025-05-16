@@ -3,7 +3,7 @@ Burkhard-Keller tree data structure for finding items separated by a small discr
 
 # examples
 
-making edges between spatially close together (distance < 1) vertices in a graph:
+making edges between spatially close together (distance <= 1) vertices in a graph:
 ```
 pub fn main(){
 	let vertices=[[-1.5, 2.0],[-1.6, 1.6],[-1.6, 1.1],[ 1.5, 1.3],[ 1.0,-0.1],
