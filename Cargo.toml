@@ -1,6 +1,7 @@
 [package]
-authors = ["Aili Nierengarten" <aili.nierengarten@gmail.com>]
+authors = ["Aili Nierengarten <aili.nierengarten@gmail.com>"]
 description = "Burkhard-Keller tree data structure for finding items separated by a small discrete distance"
+documentation = "https://docs.rs/b_k_tree"
 edition = "2024"
 name = "b-k-tree"
 license = "MIT"
