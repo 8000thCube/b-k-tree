@@ -1,381 +1,281 @@
-impl<'a,K:Borrow<Q>,M:DiscreteMetric<Q>,Q,V> Iterator for CloseKeyIter<'a,K,M,Q,V>{
-	fn next(&mut self)->Option<Self::Item>{self.inner.next().map(|(k,_v,d)|(k,d))}
-	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
-	type Item=(&'a K,usize);
-}
-impl<'a,K:Borrow<Q>,M:DiscreteMetric<Q>,Q,V> Iterator for CloseMapIter<'a,K,M,Q,V>{
-	fn next(&mut self)->Option<Self::Item>{
-		let (maxdistance,metric)=(self.maxdistance,self.metric);
-		let key=&self.key;
-		let nodes=&mut self.nodes;
-
-		while let Some(n)=nodes.pop(){
-			let (k,v,next)=(&n.key,&n.value,&n.connections);
-			let distance=metric.distance(k.borrow(),key);
-			self.remaining-=1;
-
-			nodes.extend(next.range(maxdistance.saturating_sub(distance)..=maxdistance.saturating_add(distance)).map(|(_r,n)|n));
-			if distance<=maxdistance{return Some((k,v,distance))}
-		}
-		None
-	}
-	fn size_hint(&self)->(usize,Option<usize>){(0,Some(self.remaining))}
-	type Item=(&'a K,&'a V,usize);
-}
-impl<'a,K:Borrow<Q>,M:DiscreteMetric<Q>,Q,V> Iterator for CloseValIter<'a,K,M,Q,V>{
-	fn next(&mut self)->Option<Self::Item>{self.inner.next().map(|(_k,v,d)|(v,d))}
-	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
-	type Item=(&'a V,usize);
-}
-impl<'a,K,M,Q:Clone,V> Clone for CloseKeyIter<'a,K,M,Q,V>{
-	fn clone(&self)->Self{
-		Self{inner:self.inner.clone()}
-	}
-	fn clone_from(&mut self,other:&Self){self.inner.clone_from(&other.inner)}
-}
-impl<'a,K,M,Q:Clone,V> Clone for CloseMapIter<'a,K,M,Q,V>{
-	fn clone(&self)->Self{
-		Self{key:self.key.clone(),maxdistance:self.maxdistance,metric:self.metric,nodes:self.nodes.clone(),remaining:self.remaining}
-	}
-	fn clone_from(&mut self,other:&Self){
-		(self.key.clone_from(&other.key),self.nodes.clone_from(&other.nodes));
-		(self.maxdistance,self.metric,self.remaining)=(other.maxdistance,other.metric,other.remaining);
+ham_int!(i128,i16,i32,i64,i8,isize,u128,u16,u32,u64,u8,usize);
+impl CeilL2{
+	/// creates a new metric that is the ceiling function of the euclidean metric
+	pub fn new()->Self{Self::with_factor(1.0)}
+	/// creates a new ceiling euclidean metric that rounds up to the given factor
+	pub fn with_factor(factor:f64)->Self{
+		Self{factor}
 	}
 }
-impl<'a,K,M,Q:Clone,V> Clone for CloseValIter<'a,K,M,Q,V>{
-	fn clone(&self)->Self{
-		Self{inner:self.inner.clone()}
-	}
-	fn clone_from(&mut self,other:&Self){self.inner.clone_from(&other.inner)}
+impl Default for CeilL2{
+	fn default()->Self{Self::with_factor(1.0)}
 }
-impl<'a,K,V> Clone for KeyIter<'a,K,V>{
-	fn clone(&self)->Self{
-		Self{inner:self.inner.clone()}
-	}
-	fn clone_from(&mut self,other:&Self){self.inner.clone_from(&other.inner)}
-}
-impl<'a,K,V> Clone for MapIter<'a,K,V>{
-	fn clone(&self)->Self{
-		Self{nodes:self.nodes.clone(),remaining:self.remaining}
-	}
-	fn clone_from(&mut self,other:&Self){
-		self.nodes.clone_from(&other.nodes);
-		self.remaining=other.remaining;
+impl Hamming{
+	/// creates a new hamming distance metric
+	pub fn new()->Self{
+		Self{_seal:()}
 	}
 }
-impl<'a,K,V> Clone for ValIter<'a,K,V>{
-	fn clone(&self)->Self{
-		Self{inner:self.inner.clone()}
+impl HamIter for String{
+	fn ham_iter(&self)->Self::Iter<'_>{self.chars()}
+	type Item<'a>=char;
+	type Iter<'a>=Chars<'a> where Self:'a;
+}
+impl HamIter for str{
+	fn ham_iter(&self)->Self::Iter<'_>{self.chars()}
+	type Item<'a>=char;
+	type Iter<'a>=Chars<'a> where Self:'a;
+}
+impl LevIter for String{
+	fn lev_iter(&self)->Self::Iter<'_>{self.chars()}
+	type Item<'a>=char;
+	type Iter<'a>=Chars<'a> where Self:'a;
+}
+impl LevIter for str{
+	fn lev_iter(&self)->Self::Iter<'_>{self.chars()}
+	type Item<'a>=char;
+	type Iter<'a>=Chars<'a> where Self:'a;
+}
+impl Levenshtein{
+	/// creates a new levenshtein distance metric
+	pub fn new()->Self{
+		Self{cache:Arc::new(Mutex::new(Vec::new()))}
 	}
-	fn clone_from(&mut self,other:&Self){self.inner.clone_from(&other.inner)}
 }
-impl<'a,K,V> ExactSizeIterator for KeyIter<'a,K,V>{
-	fn len(&self)->usize{self.inner.len()}
+impl<D:Add<Output=D>+Copy+Into<f64>+Mul<Output=D>,E,const N:usize> CoordIter for [E;N] where for<'a>&'a E:Sub<Output=D>{
+	fn coord_iter(&self)->Self::Iter<'_>{self.iter()}
+	type D=D;
+	type Item<'a>=&'a E where E:'a;
+	type Iter<'a>=SliceIter<'a,E> where Self:'a;
 }
-impl<'a,K,V> ExactSizeIterator for MapIter<'a,K,V>{
-	fn len(&self)->usize{self.remaining}
+impl<D:Add<Output=D>+Copy+Into<f64>+Mul<Output=D>,E> CoordIter for [E] where for<'a>&'a E:Sub<Output=D>{
+	fn coord_iter(&self)->Self::Iter<'_>{self.iter()}
+	type D=D;
+	type Item<'a>=&'a E where E:'a;
+	type Iter<'a>=SliceIter<'a,E> where Self:'a;
 }
-impl<'a,K,V> ExactSizeIterator for ValIter<'a,K,V>{
-	fn len(&self)->usize{self.inner.len()}
+impl<D:Add<Output=D>+Copy+Into<f64>+Mul<Output=D>,E> CoordIter for Vec<E> where for<'a>&'a E:Sub<Output=D>{
+	fn coord_iter(&self)->Self::Iter<'_>{self.iter()}
+	type D=D;
+	type Item<'a>=&'a E where E:'a;
+	type Iter<'a>=SliceIter<'a,E> where Self:'a;
 }
-impl<'a,K,V> Iterator for KeyIter<'a,K,V>{
-	fn next(&mut self)->Option<Self::Item>{self.inner.next().map(|(k,_v)|k)}
-	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
-	type Item=&'a K;
+impl<E:Eq,const N:usize> LevIter for [E;N]{
+	fn lev_iter(&self)->Self::Iter<'_>{self.iter()}
+	type Item<'a>=&'a E where E:'a;
+	type Iter<'a>=SliceIter<'a,E> where Self:'a;
 }
-impl<'a,K,V> Iterator for MapIter<'a,K,V>{
-	fn next(&mut self)->Option<Self::Item>{
-		let nodes=&mut self.nodes;
-		let node=nodes.pop()?;
-		let (k,v,next)=(&node.key,&node.value,&node.connections);
-		self.remaining-=1;
-
-		nodes.extend(next.values());
-		Some((k,v))
-	}
-	fn size_hint(&self)->(usize,Option<usize>){(self.remaining,Some(self.remaining))}
-	type Item=(&'a K,&'a V);
+impl<E:Eq> LevIter for [E]{
+	fn lev_iter(&self)->Self::Iter<'_>{self.iter()}
+	type Item<'a>=&'a E where E:'a;
+	type Iter<'a>=SliceIter<'a,E> where Self:'a;
 }
-impl<'a,K,V> Iterator for ValIter<'a,K,V>{
-	fn next(&mut self)->Option<Self::Item>{self.inner.next().map(|(_k,v)|v)}
-	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
-	type Item=&'a V;
+impl<E:Eq> LevIter for Vec<E>{
+	fn lev_iter(&self)->Self::Iter<'_>{self.iter()}
+	type Item<'a>=&'a E where E:'a;
+	type Iter<'a>=SliceIter<'a,E> where Self:'a;
 }
-impl<'a,M:DiscreteMetric<Q>,Q,T:Borrow<Q>> Iterator for CloseSetIter<'a,M,Q,T>{
-	fn next(&mut self)->Option<Self::Item>{self.inner.next()}
-	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
-	type Item=(&'a T,usize);
+impl<T:?Sized+CoordIter> CoordIter for &T{
+	fn coord_iter(&self)->Self::Iter<'_>{(*self).coord_iter()}
+	type D=T::D;
+	type Item<'a>=T::Item<'a> where Self:'a;
+	type Iter<'a>=T::Iter<'a> where Self:'a;
 }
-impl<'a,M,Q:Clone,T> Clone for CloseSetIter<'a,M,Q,T>{
-	fn clone(&self)->Self{
-		Self{inner:self.inner.clone()}
-	}
-	fn clone_from(&mut self,other:&Self){self.inner.clone_from(&other.inner)}
-}
-impl<'a,T> Clone for SetIter<'a,T>{
-	fn clone(&self)->Self{
-		Self{inner:self.inner.clone()}
-	}
-	fn clone_from(&mut self,other:&Self){self.inner.clone_from(&other.inner)}
-}
-impl<'a,T> ExactSizeIterator for SetIter<'a,T>{
-	fn len(&self)->usize{self.inner.len()}
-}
-impl<'a,T> Iterator for SetIter<'a,T>{
-	fn next(&mut self)->Option<Self::Item>{self.inner.next()}
-	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
-	type Item=&'a T;
-}
-impl<K,M:Default,V> Default for BKTreeMap<K,M,V>{
-	fn default()->Self{Self::new(M::default())}
-}
-impl<K,M,V> BKTreeMap<K,M,V>{
-	/// clears the map, removing all elements
-	pub fn clear(&mut self){
-		self.length=0;
-		self.root=None;
-	}
-	/// gets the key value pairs whose distance is at most max distance from key
-	pub fn close_iter<Q>(&self,key:Q,maxdistance:usize)->CloseMapIter<'_,K,M,Q,V> where K:Borrow<Q>,M:DiscreteMetric<Q>{
-		CloseMapIter{key,maxdistance,metric:&self.metric,nodes:self.root.as_ref().into_iter().collect(),remaining:self.length}
-	}
-	/// gets the keys whose distance is at most max distance from key
-	pub fn close_keys<Q>(&self,key:Q,maxdistance:usize)->CloseKeyIter<'_,K,M,Q,V> where K:Borrow<Q>,M:DiscreteMetric<Q>{
-		CloseKeyIter{inner:self.close_iter(key,maxdistance)}
-	}
-	/// gets the values whose keys are at most max distance from key
-	pub fn close_values<Q>(&self,key:Q,maxdistance:usize)->CloseValIter<'_,K,M,Q,V> where K:Borrow<Q>,M:DiscreteMetric<Q>{
-		CloseValIter{inner:self.close_iter(key,maxdistance)}
-	}
-	/// returns the closest key value pairs at most maxdistance from the key, sorted by distance
-	pub fn closest<'a,Q:?Sized>(&self,key:&Q,maxdistance:usize)->Vec<(&K,&V,usize)> where K:Borrow<Q>,M:DiscreteMetric<Q>{
-		fn explore<'a,K:Borrow<Q>,M:DiscreteMetric<Q>,Q:?Sized,V>(key:&Q,maxdistance:usize,metric:&M,node:&'a Node<K,V>,results:&mut Vec<(&'a K,&'a V,usize)>){
-			let distance=metric.distance(key,node.key.borrow());
-
-			if distance<=maxdistance{results.push((&node.key,&node.value,distance))}
-			node.connections.range(distance.saturating_sub(maxdistance)..=distance.saturating_add(maxdistance)).for_each(|(_d,n)|explore(key,maxdistance,metric,n,results));
-		}
-		let metric=&self.metric;
-		let root=if let Some(r)=&self.root{r}else{return Vec::new()};
-		let mut results=Vec::with_capacity(10);
-
-		explore(key,maxdistance,metric,root,&mut results);
-		results.sort_unstable_by_key(|(_k,_v,d)|*d);
-		results
-	}
-	/// returns the closest key value pairs at most maxdistance from the key, sorted by distance
-	pub fn closest_mut<'a,Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Vec<(&K,&mut V,usize)> where K:Borrow<Q>,M:DiscreteMetric<Q>{
-		fn explore<'a,K:Borrow<Q>,M:DiscreteMetric<Q>,Q:?Sized,V>(key:&Q,maxdistance:usize,metric:&M,node:&'a mut Node<K,V>,results:&mut Vec<(&'a K,&'a mut V,usize)>){
-			let distance=metric.distance(key,node.key.borrow());
-
-			if distance<=maxdistance{results.push((&node.key,&mut node.value,distance))}
-			node.connections.range_mut(distance.saturating_sub(maxdistance)..=distance.saturating_add(maxdistance)).for_each(|(_d,n)|explore(key,maxdistance,metric,n,results));
-		}
-		let metric=&self.metric;
-		let root=if let Some(r)=&mut self.root{r}else{return Vec::new()};
-		let mut results=Vec::with_capacity(10);
-
-		explore(key,maxdistance,metric,root,&mut results);
-		results.sort_unstable_by_key(|(_k,_v,d)|*d);
-		results
-	}
-	/// gets the value whose key is closest to the given key, or None if the map contains no key at most max distance from the given key. If there are multiple closest keys, exactly which is returned is unspecified
-	pub fn get<Q:?Sized>(&self,key:&Q,maxdistance:usize)->Option<(&V,usize)> where K:Borrow<Q>,M:DiscreteMetric<Q>{self.get_key_value(key,maxdistance).map(|(_k,v,d)|(v,d))}
-	/// gets the key value pair and distance whose key is closest to the given key, or None if the map contains no key at most max distance from the given key. If there are multiple closest keys, exactly which is returned is unspecified
-	pub fn get_key_value<Q:?Sized>(&self,key:&Q,maxdistance:usize)->Option<(&K,&V,usize)> where K:Borrow<Q>,M:DiscreteMetric<Q>{
-		fn explore<'a,K:Borrow<Q>,M:DiscreteMetric<Q>,Q:?Sized,V>(key:&Q,maxdistance:usize,metric:&M,node:&'a Node<K,V>)->Option<(&'a K,&'a V,usize)>{
-			let distance=metric.distance(key,node.key.borrow());
-
-			if distance==0{return Some((&node.key,&node.value,0))}
-			let includecurrent=distance<=maxdistance;
-			let nextnodes=node.connections.range(distance.saturating_sub(maxdistance)..=distance.saturating_add(maxdistance)).filter_map(|(_d,n)|explore(key,maxdistance,metric,n));
-			nextnodes.chain(includecurrent.then_some((&node.key,&node.value,distance))).min_by_key(|(_k,_v,d)|*d)
-		}
-		let metric=&self.metric;
-		let root=if let Some(r)=&self.root{r}else{return None};
-
-		explore(key,maxdistance,metric,root)
-	}
-	/// gets the value whose key is closest to the given key, or None if the map contains no key at most max distance from the given key. If there are multiple closest keys, exactly which is returned is unspecified
-	pub fn get_mut<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Option<&mut V> where K:Borrow<Q>,M:DiscreteMetric<Q>{
-		fn explore<'a,K:Borrow<Q>,M:DiscreteMetric<Q>,Q:?Sized,V>(key:&Q,maxdistance:usize,metric:&M,node:&'a mut Node<K,V>)->Option<(&'a mut V,usize)>{
-			let distance=metric.distance(key,node.key.borrow());
-
-			if distance==0{return Some((&mut node.value,0))}
-			let includecurrent=distance<=maxdistance;
-			let nextnodes=node.connections.range_mut(distance.saturating_sub(maxdistance)..=distance.saturating_add(maxdistance)).filter_map(|(_d,n)|explore(key,maxdistance,metric,n));
-			nextnodes.chain(includecurrent.then_some((&mut node.value,distance))).min_by_key(|(_v,d)|*d)
-		}
-		let metric=&self.metric;
-		let root=if let Some(r)=&mut self.root{r}else{return None};
-
-		explore(key,maxdistance,metric,root).map(|(n,_d)|n)
-	}
-	/// inserts a key-value pair into the map, returning the previous value at that key, or None if there was no previous value. If the old value is returned the key is not updated.
-	pub fn insert(&mut self,key:K,value:V)->Option<V> where M:DiscreteMetric<K>{
-		let metric=&self.metric;
-		let mut node=if let Some(n)=self.root.as_mut(){
-			n
-		}else{
-			self.length+=1;
-			self.root=Some(Node::new(key,value));
-			return None;
-		};
-		let (mut k,mut v)=(Some(key),Some(value));
+impl<T:?Sized+CoordIter> CeilL2Distance for T{
+	fn ceil_l2_distance(&self,factor:f64,other:&Self)->usize{
+		let (mut x,mut y)=(self.coord_iter(),other.coord_iter());
+		let mut r2=None;
 
 		loop{
-			let distance=if let Some(k)=&k{metric.distance(k,&node.key)}else{break};
-			if distance==0{return Some(replace(&mut node.value,v.unwrap()))}
-			node=node.connections.entry(distance).or_insert_with(||Node::new(k.take().unwrap(),v.take().unwrap()));
+			let d=if let (Some(x),Some(y))=(x.next(),y.next()){x-y}else{break};
+			let d2=d*d;
+			r2=Some(if let Some(r2)=r2{d2+r2}else{d2})
 		}
-		self.length+=1;
-		None
-	}
-	/// returns true if the map contains no entries
-	pub fn is_empty(&self)->bool{self.length==0}
-	/// makes an iterator over the mappings
-	pub fn iter(&self)->MapIter<'_,K,V>{
-		MapIter{nodes:self.root.as_ref().into_iter().collect(),remaining:self.length}
-	}
-	/// makes an iterator over the keys
-	pub fn keys(&self)->KeyIter<'_,K,V>{
-		KeyIter{inner:self.iter()}
-	}
-	/// returns the number of entries in the map
-	pub fn len(&self)->usize{self.length}
-	/// creates a new tree
-	pub fn new(metric:M)->Self{
-		Self{length:0,metric,root:None}
-	}
-	/// makes an iterator over the values
-	pub fn values(&self)->ValIter<'_,K,V>{
-		ValIter{inner:self.iter()}
+		let r2=r2.map(Into::into).unwrap_or(0.0);
+		((r2.sqrt()/factor).ceil()*factor) as usize
 	}
 }
-impl<K,V> Node<K,V>{
-	/// creates a new node
-	fn new(key:K,value:V)->Self{
-		Self{connections:BTreeMap::new(),key,value}
+impl<T:?Sized+HamIter> HamIter for &T{
+	fn ham_iter(&self)->Self::Iter<'_>{(*self).ham_iter()}
+	type Item<'a>=T::Item<'a> where Self:'a;
+	type Iter<'a>=T::Iter<'a> where Self:'a;
+}
+impl<T:?Sized+HamIter> HammingDistance for T{
+	fn hamming_distance(&self,other:&Self)->usize{
+		let (mut x,mut y)=(self.ham_iter(),other.ham_iter());
+		let mut count=0;
+
+		loop {
+			match (x.next(),y.next()){
+				(Some(a),Some(b))=>if a!=b{count+=1},
+				(Some(_), None) | (None, Some(_))=>count+=1,
+				(None, None)=>break,
+			}
+		}
+		count
 	}
 }
-impl<T,M:Default> Default for BKTreeSet<T,M>{
-	fn default()->Self{Self::new(M::default())}
+impl<T:?Sized+LevIter> LevIter for &T{
+	fn lev_iter(&self)->Self::Iter<'_>{(*self).lev_iter()}
+	type Item<'a>=T::Item<'a> where Self:'a;
+	type Iter<'a>=T::Iter<'a> where Self:'a;
 }
-impl<T,M:Default+DiscreteMetric<T>> FromIterator<T> for BKTreeSet<T,M>{
-	fn from_iter<I:IntoIterator<Item=T>>(iter:I)->Self{
-		let mut set=Self::default();
-		iter.into_iter().for_each(|t|{
-			set.insert(t);
-		});
-		set
+impl<T:?Sized+LevIter> LevenshteinDistance for T{
+	fn levenshtein_distance(&self,distances:&mut Vec<usize>,other:&Self)->usize{
+		let len=self.levenshtein_len();
+
+		if len==0{return other.levenshtein_len()}
+		for n in distances.len()..len{
+			distances.push(if n>0{distances[n-1]+1}else{1});
+		}
+		for (k,y) in other.lev_iter().enumerate(){
+			let mut diagonal=k;
+			let mut left=k+1;
+			let mut up;
+			for (n,x) in self.lev_iter().enumerate(){
+				up=distances[n];
+				let d=(diagonal+if x==y{0}else{1}).min(left+1).min(up+1);
+				(diagonal,left)=(up,d);
+				distances[n]=d;
+			}
+		}
+		*distances.last().unwrap()
+	}
+	fn levenshtein_len(&self)->usize{self.lev_iter().count()}
+}
+impl<V:CeilL2Distance+?Sized> DiscreteMetric<V> for CeilL2{
+	fn distance(&self,x:&V,y:&V)->usize{x.ceil_l2_distance(self.factor,y)}
+}
+impl<V:HammingDistance+?Sized> DiscreteMetric<V> for Hamming{
+	fn distance(&self,x:&V,y:&V)->usize{x.hamming_distance(y)}
+}
+impl<V:LevenshteinDistance+?Sized> DiscreteMetric<V> for Levenshtein{
+	fn distance(&self,x:&V,y:&V)->usize{
+		let (mut x,mut y)=(x,y);
+		let (mut xl,mut yl)=(x.levenshtein_len(),y.levenshtein_len());
+		if x.levenshtein_len()>y.levenshtein_len(){
+			swap(&mut x,&mut y);
+			swap(&mut xl,&mut yl);
+		}
+
+		let mut cache=self.cache.try_lock();
+		let mut distances:Vec<usize>=if let Ok(c)=&mut cache{take(&mut *c)}else{Vec::new()};
+
+		distances.clear();
+		distances.reserve(xl);
+		let distance=x.levenshtein_distance(&mut distances,y);
+		if let Ok(c)=&mut cache{**c=distances}
+		distance
 	}
 }
-impl<T,M> BKTreeSet<T,M>{
-	/// gets the items whose distance is at most max distance from key
-	pub fn close_iter<Q>(&self,key:Q,maxdistance:usize)->CloseSetIter<'_,M,Q,T> where T:Borrow<Q>,M:DiscreteMetric<Q>{
-		CloseSetIter{inner:self.inner.close_keys(key,maxdistance)}
-	}
-	/// tests if the set contains an element within max distance of the key
-	pub fn contains<Q:?Sized>(&self,key:&Q,maxdistance:usize)->bool where M:DiscreteMetric<Q>,T:Borrow<Q>{self.inner.get_key_value(key,maxdistance).is_some()}
-	/// returns a reference to the element in the set that is closest to the key within max distance, or None if the set contains no element at most max distance from the given element. If there are multiple closest elements, exactly which is returned is unspecified
-	pub fn get<Q:?Sized>(&self,key:&Q,maxdistance:usize)->Option<(&T,usize)> where M:DiscreteMetric<Q>,T:Borrow<Q>{self.inner.get_key_value(key,maxdistance).map(|(k,_v,d)|(k,d))}
-	/// inserts
-	pub fn insert(&mut self,value:T)->bool where M:DiscreteMetric<T>{self.inner.insert(value,()).is_none()}
-	/// returns true if the set contains no entries
-	pub fn is_empty(&self)->bool{self.inner.is_empty()}
-	/// returns the number of entries in the set
-	pub fn len(&self)->usize{self.inner.len()}
-	/// creates a new tree
-	pub fn new(metric:M)->Self{
-		Self{inner:BKTreeMap::new(metric)}
-	}
-	/// makes an iterator over the items
-	pub fn iter(&self)->SetIter<'_,T>{
-		SetIter{inner:self.inner.keys()}
-	}
+/// implements hamming distance for integers
+macro_rules! ham_int{
+	($($int:ty),*)=>($(
+		impl HammingDistance for &$int{
+			fn hamming_distance(&self,other:&Self)->usize{(*self^*other).count_ones() as usize}
+		}
+		impl HammingDistance for $int{
+			fn hamming_distance(&self,other:&Self)->usize{(self^other).count_ones() as usize}
+		}
+	)*)
 }
 #[cfg(test)]
 mod tests{
 	#[test]
-	fn insert_get_rectangle(){
-		let mut map=BKTreeMap::new(Cheb2D);
-
-		assert_eq!(map.insert((-1,-1),'A'),None);
-		assert_eq!(map.insert((-1,2),'B'),None);
-		assert_eq!(map.insert((1,-1),'C'),None);
-		assert_eq!(map.insert((1,2),'D'),None);
-		assert_eq!(map.insert((-1,2),'b'),Some('B'));
-		assert_eq!(map.insert((1,2),'d'),Some('D'));
-		assert_eq!(map.insert((1,-1),'c'),Some('C'));
-		assert_eq!(map.insert((-1,-1),'a'),Some('A'));
-		assert_eq!(map.len(),4);
-
-		for n in 0..10{
-			assert_eq!(map.get_key_value(&(-1,-1),n),Some((&(-1,-1),&'a',0)));
-			assert_eq!(map.get_key_value(&(-1,2),n),Some((&(-1,2),&'b',0)));
-			assert_eq!(map.get_key_value(&(1,-1),n),Some((&(1,-1),&'c',0)));
-			assert_eq!(map.get_key_value(&(1,2),n),Some((&(1,2),&'d',0)));
-		}
-
-		assert_eq!(map.get_key_value(&(-1,-2),0),None);
-		assert_eq!(map.get_key_value(&(-1,3),0),None);
-		assert_eq!(map.get_key_value(&(2,-1),0),None);
-		assert_eq!(map.get_key_value(&(2,1),0),None);
-
-		assert_eq!(map.get_key_value(&(-1,-2),1),Some((&(-1,-1),&'a',1)));
-		assert_eq!(map.get_key_value(&(-1,3),1),Some((&(-1,2),&'b',1)));
-		assert_eq!(map.get_key_value(&(2,-1),1),Some((&(1,-1),&'c',1)));
-		assert_eq!(map.get_key_value(&(2,2),1),Some((&(1,2),&'d',1)));
+	fn ceil_l2_2d_int(){
+		let m=CeilL2::new();
+		assert_eq!(m.distance(&[1,2],&[2,1]),2);
+		assert_eq!(m.distance(&[3,3],&[3,4]),1);
+		assert_eq!(m.distance(&[0,0],&[3,4]),5);
 	}
-	impl DiscreteMetric<(isize,isize)> for Cheb2D{
-		fn distance(&self,x:&(isize,isize),y:&(isize,isize))->usize{
-			let ((xx,xy),(yx,yy))=(x,y);
-			((xx-yx).abs() as usize).max((xy-yy).abs() as usize)
-		}
+	#[test]
+	fn ham_int(){
+		let m=Hamming::new();
+		assert_eq!(m.distance(&1,&0),1);
+		assert_eq!(m.distance(&0b1011101,&0b1001001),2);
+		assert_eq!(m.distance(&9999,&9999),0);
+		assert_eq!(m.distance(&-1_i32,&0_i32),32);
 	}
-	#[derive(Clone,Copy,Debug,Default)]
-	/// 2d integer chebyshev distance for testing purposes
-	struct Cheb2D;
+	#[test]
+	fn ham_string() {
+		let m=Hamming::new();
+		assert_eq!(m.distance("rust","rust"),0);
+		assert_eq!(m.distance("karolin","kathrin"),3);
+		assert_eq!(m.distance("1011101","1001001"),2);
+		assert_eq!(m.distance("2173896","2233796"),3);
+	}
+	#[test]
+	fn lev(){
+		let metric=Levenshtein::new();
+		assert_eq!(metric.distance("here","there"),1);
+		assert_eq!(metric.distance("hi","hello"),4);
+		assert_eq!(metric.distance("kitten","sitting"),3);
+		assert_eq!(metric.distance("saturday","sunday"),3);
+		assert_eq!(metric.distance("there","there"),0);
+		assert_eq!(metric.distance("there","there's"),2);
+	}
+
 	use super::*;
 }
 #[derive(Clone,Debug)]
-/// a tree for quickly finding items separated by a small discrete distance
-pub struct BKTreeMap<K,M,V>{length:usize,metric:M,root:Option<Node<K,V>>}
-#[derive(Clone,Debug)]
-/// a set for quickly finding items separated by a small discrete distance
-pub struct BKTreeSet<T,M>{inner:BKTreeMap<T,M,()>}
-#[derive(Debug)]
-/// iterator over keys close to some key
-pub struct CloseKeyIter<'a,K,M,Q,V>{inner:CloseMapIter<'a,K,M,Q,V>}
-#[derive(Debug)]
-/// iterator over mappings close to some key
-pub struct CloseMapIter<'a,K,M,Q,V>{key:Q,maxdistance:usize,metric:&'a M,nodes:Vec<&'a Node<K,V>>,remaining:usize}
-#[derive(Debug)]
-/// iterator over the items close to some key
-pub struct CloseSetIter<'a,M,Q,T>{inner:CloseKeyIter<'a,T,M,Q,()>}
-#[derive(Debug)]
-/// iterator over values with keys close to some key
-pub struct CloseValIter<'a,K,M,Q,V>{inner:CloseMapIter<'a,K,M,Q,V>}
-#[derive(Debug)]
-/// iterator over the keys in the tree
-pub struct KeyIter<'a,K,V>{inner:MapIter<'a,K,V>}
-#[derive(Debug)]
-/// iterator over the mappings in the tree
-pub struct MapIter<'a,K,V>{nodes:Vec<&'a Node<K,V>>,remaining:usize}
-#[derive(Debug)]
-/// iterator over the items in the tree
-pub struct SetIter<'a,T>{inner:KeyIter<'a,T,()>}
-#[derive(Debug)]
-/// iterator over the values in the tree
-pub struct ValIter<'a,K,V>{inner:MapIter<'a,K,V>}
-/// a discrete distance metric. It should obey the usual axioms of a metric space
-pub trait DiscreteMetric<T:?Sized>{
-	/// computes the distance between two elements of the metric space
-	fn distance(&self,x:&T,y:&T)->usize;
-}
+/// distance metric that is the usual euclidean metric, rounded up to a factor. behavior on length mismatch is currently unspecified
+pub struct CeilL2{factor:f64}
 #[derive(Clone,Debug,Default)]
-/// tree node
-struct Node<K,V>{connections:BTreeMap<usize,Node<K,V>>,key:K,value:V}
-use std::{
-	borrow::Borrow,collections::BTreeMap,iter::FromIterator,mem::replace
+/// hamming distance metric that is bitwise on integers and charwise on strings. behavior on length mismatch is currently unspecified
+pub struct Hamming{_seal:()}
+#[derive(Clone,Debug,Default)]
+/// levenshtein distance metric for strings
+pub struct Levenshtein{cache:Arc<Mutex<Vec<usize>>>}
+/// trait for computing coordinate based distances by iteration over primitives
+pub trait CoordIter{
+	/// returns an iterator over coordinates
+	fn coord_iter(&self)->Self::Iter<'_>;
+	/// the coordinate displacement type
+	type D:Add<Output=Self::D>+Copy+Into<f64>+Mul<Output=Self::D>;
+	/// the item type
+	type Item<'a>:Sub<Output=Self::D> where Self:'a;
+	/// the iterator type
+	type Iter<'a>:Iterator<Item=Self::Item<'a>> where Self:'a;
+}
+/// trait for computing the hamming distance by iteration
+pub trait HamIter{
+	/// returns an iterator for comparing characters in a hamming distance
+	fn ham_iter(&self)->Self::Iter<'_>;
+	/// the item type
+	type Item<'a>:Eq where Self:'a;
+	/// the iterator type
+	type Iter<'a>:Iterator<Item=Self::Item<'a>> where Self:'a;
+}
+/// trait for ceil l2 distance compatibility
+pub trait CeilL2Distance{
+	/// computes the ceiling l2 distance
+	fn ceil_l2_distance(&self,factor:f64,other:&Self)->usize;
+}
+/// trait for hamming distance compatibility
+pub trait HammingDistance{
+	/// computes the distance given and other string
+	fn hamming_distance(&self,other:&Self)->usize;
+}
+/// trait for computing levenshtein distance by iteration
+pub trait LevIter{
+	/// returns an iterator for comparing characters in a levenshtein distance. Since this distance requires multiple iterations, it shouldn't change length or sequence without self being mutated
+	fn lev_iter(&self)->Self::Iter<'_>;
+	/// the item type
+	type Item<'a>:Eq where Self:'a;
+	/// the iterator type
+	type Iter<'a>:Iterator<Item=Self::Item<'a>> where Self:'a;
+}
+/// trait for levenshtein distance compatibility
+pub trait LevenshteinDistance{
+	/// computes the distance between self and other string given its initial distances to substrings of self
+	fn levenshtein_distance(&self,distances:&mut Vec<usize>,other:&Self)->usize;
+	/// returns the string length to be used for levenshtein distance purposes
+	fn levenshtein_len(&self)->usize;
+}
+use {
+	crate::DiscreteMetric,
+	ham_int,
+	std::{
+		cmp::Eq,mem::{swap,take},ops::{Add,Mul,Sub},slice::Iter as SliceIter,str::Chars,sync::{Arc,Mutex}
+	}
 };
