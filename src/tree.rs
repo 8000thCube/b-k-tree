@@ -195,14 +195,24 @@ impl<K,M:Default+DiscreteMetric<K>,V> FromIterator<(K,V)> for BKTreeMap<K,M,V>{
 impl<K,M:Default,V> Default for BKTreeMap<K,M,V>{
 	fn default()->Self{Self::new(M::default())}
 }
-impl<K,M,V> BKTreeMap<K,M,V>{
+impl<K,M,V> BKTreeMap<K,M,V>{//TODO other sterotypical map operations
+	/// moves all elements from other into self, leaving other empty. If a key from other is already present in self, the respective value from self will be overwritten with the respective value from other
+	pub fn append<M2>(&mut self,other:&mut BKTreeMap<K,M2,V>) where M:DiscreteMetric<K>{
+		fn explore<K,M:DiscreteMetric<K>,V>(node:Node<K,V>,tree:&mut BKTreeMap<K,M,V>){
+			let (k,v,next)=(node.key,node.value,node.connections);
+			tree.insert(k,v);
+			next.into_iter().for_each(|(_d,n)|explore(n,tree));
+		}
+
+		if let Some(n)=other.root.take(){explore(n,self)}
+	}
 	/// clears the map, removing all elements
 	pub fn clear(&mut self){
 		self.length=0;
 		self.root=None;
 	}
 	/// gets the key value pairs whose distance is at most max distance from key
-	pub fn close_iter<Q>(&self,key:Q,maxdistance:usize)->CloseMapIter<'_,K,M,Q,V> where K:Borrow<Q>,M:DiscreteMetric<Q>{
+	pub fn close_iter<Q>(&self,key:Q,maxdistance:usize)->CloseMapIter<'_,K,M,Q,V> where K:Borrow<Q>,M:DiscreteMetric<Q>{//TODO close iter mut
 		CloseMapIter{key,maxdistance,metric:&self.metric,nodes:self.root.as_ref().into_iter().collect(),remaining:self.length}
 	}
 	/// gets the keys whose distance is at most max distance from key
@@ -213,7 +223,7 @@ impl<K,M,V> BKTreeMap<K,M,V>{
 	pub fn close_values<Q>(&self,key:Q,maxdistance:usize)->CloseValIter<'_,K,M,Q,V> where K:Borrow<Q>,M:DiscreteMetric<Q>{
 		CloseValIter{inner:self.close_iter(key,maxdistance)}
 	}
-	/// returns the closest key value pairs at most maxdistance from the key, sorted by distance
+	/// returns the key value pairs at most maxdistance from the key, sorted by distance
 	pub fn closest<'a,Q:?Sized>(&self,key:&Q,maxdistance:usize)->Vec<(&K,&V,usize)> where K:Borrow<Q>,M:DiscreteMetric<Q>{
 		fn explore<'a,K:Borrow<Q>,M:DiscreteMetric<Q>,Q:?Sized,V>(key:&Q,maxdistance:usize,metric:&M,node:&'a Node<K,V>,results:&mut Vec<(&'a K,&'a V,usize)>){
 			let distance=metric.distance(key,node.key.borrow());
@@ -229,7 +239,7 @@ impl<K,M,V> BKTreeMap<K,M,V>{
 		results.sort_unstable_by_key(|(_k,_v,d)|*d);
 		results
 	}
-	/// returns the closest key value pairs at most maxdistance from the key, sorted by distance
+	/// returns the key value pairs at most maxdistance from the key, sorted by distance
 	pub fn closest_mut<'a,Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Vec<(&K,&mut V,usize)> where K:Borrow<Q>,M:DiscreteMetric<Q>{
 		fn explore<'a,K:Borrow<Q>,M:DiscreteMetric<Q>,Q:?Sized,V>(key:&Q,maxdistance:usize,metric:&M,node:&'a mut Node<K,V>,results:&mut Vec<(&'a K,&'a mut V,usize)>){
 			let distance=metric.distance(key,node.key.borrow());
@@ -432,7 +442,7 @@ impl<T,M:Default+DiscreteMetric<T>> FromIterator<T> for BKTreeSet<T,M>{
 		Self{inner:iter.into_iter().map(|t|(t,())).collect()}
 	}
 }
-impl<T,M> BKTreeSet<T,M>{
+impl<T,M> BKTreeSet<T,M>{//TODO other sterotypical set operations
 	/// gets the items whose distance is at most max distance from key
 	pub fn close_iter<Q>(&self,key:Q,maxdistance:usize)->CloseSetIter<'_,M,Q,T> where T:Borrow<Q>,M:DiscreteMetric<Q>{
 		CloseSetIter{inner:self.inner.close_keys(key,maxdistance)}
@@ -456,9 +466,7 @@ impl<T,M> BKTreeSet<T,M>{
 		SetIter{inner:self.inner.keys()}
 	}
 	/// removes an item from the tree
-	pub fn remove<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->bool where T:Borrow<Q>,M:DiscreteMetric<Q>+DiscreteMetric<T>{self.inner.remove_entry(key,maxdistance).is_some()}
-	/// removes an item from the tree
-	pub fn take<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Option<(T,usize)> where T:Borrow<Q>,M:DiscreteMetric<Q>+DiscreteMetric<T>{self.inner.remove_entry(key,maxdistance).map(|(k,_v,d)|(k,d))}
+	pub fn remove<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Option<(T,usize)> where T:Borrow<Q>,M:DiscreteMetric<Q>+DiscreteMetric<T>{self.inner.remove_entry(key,maxdistance).map(|(k,_v,d)|(k,d))}
 }
 impl<T,M> IntoIterator for BKTreeSet<T,M>{
 	fn into_iter(self)->Self::IntoIter{
