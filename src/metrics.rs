@@ -7,6 +7,9 @@ impl CeilL2{
 		Self{factor}
 	}
 }
+impl Clone for Levenshtein{
+	fn clone(&self)->Self{Self::new()}
+}
 impl Default for CeilL2{
 	fn default()->Self{Self::with_factor(1.0)}
 }
@@ -39,7 +42,7 @@ impl LevIter for str{
 impl Levenshtein{
 	/// creates a new levenshtein distance metric
 	pub fn new()->Self{
-		Self{cache:Arc::new(Mutex::new(Vec::new()))}
+		Self{cache:Mutex::new(Vec::new())}
 	}
 }
 impl<D:Add<Output=D>+Copy+Into<f64>+Mul<Output=D>,E,const N:usize> CoordIter for [E;N] where for<'a>&'a E:Sub<Output=D>{
@@ -92,7 +95,7 @@ impl<T:?Sized+CoordIter> CeilL2Distance for T{
 			r2=Some(if let Some(r2)=r2{d2+r2}else{d2})
 		}
 		let r2=r2.map(Into::into).unwrap_or(0.0);
-		((r2.sqrt()/factor).ceil()*factor) as usize
+		(r2.sqrt()/factor).ceil() as usize
 	}
 }
 impl<T:?Sized+HamIter> HamIter for &T{
@@ -218,14 +221,14 @@ mod tests{
 	use super::*;
 }
 #[derive(Clone,Debug)]
-/// distance metric that is the usual euclidean metric, rounded up to a factor. behavior on length mismatch is currently unspecified
+/// distance metric that is the usual euclidean metric, divided by a scale factor and rounded up. behavior on length mismatch is currently unspecified
 pub struct CeilL2{factor:f64}
 #[derive(Clone,Debug,Default)]
 /// hamming distance metric that is bitwise on integers and charwise on strings. behavior on length mismatch is currently unspecified
 pub struct Hamming{_seal:()}
-#[derive(Clone,Debug,Default)]
+#[derive(Debug,Default)]
 /// levenshtein distance metric for strings
-pub struct Levenshtein{cache:Arc<Mutex<Vec<usize>>>}
+pub struct Levenshtein{cache:Mutex<Vec<usize>>}
 /// trait for computing coordinate based distances by iteration over primitives
 pub trait CoordIter{
 	/// returns an iterator over coordinates
@@ -276,6 +279,6 @@ use {
 	crate::DiscreteMetric,
 	ham_int,
 	std::{
-		cmp::Eq,mem::{swap,take},ops::{Add,Mul,Sub},slice::Iter as SliceIter,str::Chars,sync::{Arc,Mutex}
+		cmp::Eq,mem::{swap,take},ops::{Add,Mul,Sub},slice::Iter as SliceIter,str::Chars,sync::Mutex
 	}
 };
