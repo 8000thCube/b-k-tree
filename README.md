@@ -1,5 +1,5 @@
 # b-k-tree
-Burkhard-Keller tree data structure for finding items separated by a small discrete distance
+A Burkhard-Keller tree, or BK-tree is a data structure for finding items separated by a small discrete distance
 
 # examples
 
