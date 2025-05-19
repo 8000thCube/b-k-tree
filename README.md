@@ -1,26 +1,27 @@
 # b-k-tree
-A Burkhard-Keller tree, or BK-tree is a data structure for finding items separated by a small discrete distance
+Burkhard-Keller tree data structure for finding items separated by a small discrete distance
 
 # examples
 
 making edges between spatially close together (distance <= 1) vertices in a graph:
-```
+```rust
 pub fn main(){
 	let vertices=[[-1.5, 2.0],[-1.6, 1.6],[-1.6, 1.1],[ 1.5, 1.3],[ 1.0,-0.1],
 				  [ 0.5, 0.3],[-2.0, 1.0],[ 0.5,-1.0],[ 0.9, 0.8],[ 2.0, 2.0]];
 	let tree:BKTreeSet<[f32;2],CeilL2>=vertices.into_iter().collect();
-	let edges:HashSet<([u32;2],[u32;2])>=vertices.into_iter().flat_map(|x|{
-		let close=tree.close_iter(x,1).map(|(y,_d)|[y[0].to_bits(),y[1].to_bits()]);
-		let x=[x[0].to_bits(),x[1].to_bits()];
-		close.filter(move|&y|x!=y).map(move|y|if x<y{(x,y)}else{(y,x)})
+	let mut edges:Vec<([f32;2],[f32;2])>=vertices.into_iter().flat_map(|u|{
+		let close=tree.close_iter(u,1).map(|(v,_d)|*v).filter(move|&v|u!=v);
+		close.map(move|v|if u<v{(u,v)}else{(v,u)})
 	}).collect();
+	edges.sort_unstable_by_key(|([ux,uy],[vx,vy])|[ux.to_bits(),uy.to_bits(),vx.to_bits(),vy.to_bits()]);
+	edges.dedup();
 
-	edges.iter().map(|([x0,x1],[y0,y1])|([f32::from_bits(*x0),f32::from_bits(*x1)],[f32::from_bits(*y0),f32::from_bits(*y1)])).for_each(|(p,q)|{
+	edges.iter().for_each(|(p,q)|{
 		println!("([{}, {}], [{}, {}])",p[0],p[1],q[0],q[1]);
 	});
 }
 use {
-	b_k_tree::{BKTreeSet,metrics::CeilL2},std::{collections::HashSet}
+	b_k_tree::{BKTreeSet,metrics::CeilL2},
 };
 ```
 output:
@@ -38,7 +39,7 @@ output:
 ```
 
 classifying by the category associated with closest string in a dictionary:
-```
+```rust
 pub fn main(){
 	let mut tree=BKTreeMap::new(Levenshtein::new());
 	tree.insert("calculate","mathematics");
@@ -64,5 +65,3 @@ name
 mathematics
 not found
 ```
-
-
