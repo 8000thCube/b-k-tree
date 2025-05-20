@@ -14,7 +14,7 @@ impl<'a,K,M:DiscreteMetric<K,Q>,Q,V> Iterator for CloseMapIter<'a,K,M,Q,V>{
 			let distance=metric.distance(k,key);
 			self.remaining-=1;
 
-			nodes.extend(next.range(maxdistance.saturating_sub(distance)..=maxdistance.saturating_add(distance)).map(|(_r,n)|n));
+			nodes.extend(next.range(distance.saturating_sub(maxdistance)..=distance.saturating_add(maxdistance)).map(|(_r,n)|n));
 			if distance<=maxdistance{return Some((k,v,distance))}
 		}
 		None
@@ -174,6 +174,13 @@ impl<K,M:Default,V> Default for BKTreeMap<K,M,V>{
 impl<K,M:DiscreteMetric<K,K>,V> Extend<(K,V)> for BKTreeMap<K,M,V>{
 	fn extend<I:IntoIterator<Item=(K,V)>>(&mut self,iter:I){iter.into_iter().map(|(k,v)|self.insert(k,v)).for_each(|_|())}
 }
+impl<K,M:DiscreteMetric<K,Q>,Q,V> Index<&Q> for BKTreeMap<K,M,V>{
+	fn index(&self,index:&Q)->&Self::Output{self.get(index,0).map(|(v,_d)|v).expect("mapping must exist to use index")}
+	type Output=V;
+}
+impl<K,M:DiscreteMetric<K,Q>,Q,V> IndexMut<&Q> for BKTreeMap<K,M,V>{
+	fn index_mut(&mut self,index:&Q)->&mut Self::Output{self.get_mut(index,0).map(|(v,_d)|v).expect("mapping must exist to use index")}
+}
 impl<K,M,V> BKTreeMap<K,M,V>{//TODO other sterotypical map operations
 	/// moves all elements from other into self, leaving other empty. If a key from other is already present in self, the respective value from self will be overwritten with the respective value from other
 	pub fn append<M2>(&mut self,other:&mut BKTreeMap<K,M2,V>) where M:DiscreteMetric<K,K>{
@@ -254,7 +261,7 @@ impl<K,M,V> BKTreeMap<K,M,V>{//TODO other sterotypical map operations
 		explore(key,maxdistance,metric,root)
 	}
 	/// gets the value whose key is closest to the given key, or None if the map contains no key at most max distance from the given key. If there are multiple closest keys, exactly which is returned is unspecified
-	pub fn get_mut<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Option<&mut V> where M:DiscreteMetric<K,Q>{
+	pub fn get_mut<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Option<(&mut V,usize)> where M:DiscreteMetric<K,Q>{
 		fn explore<'a,K,M:DiscreteMetric<K,Q>,Q:?Sized,V>(key:&Q,maxdistance:usize,metric:&M,node:&'a mut Node<K,V>)->Option<(&'a mut V,usize)>{
 			let distance=metric.distance(&node.key,key);
 
@@ -266,7 +273,7 @@ impl<K,M,V> BKTreeMap<K,M,V>{//TODO other sterotypical map operations
 		let metric=&self.metric;
 		let root=if let Some(r)=&mut self.root{r}else{return None};
 
-		explore(key,maxdistance,metric,root).map(|(n,_d)|n)
+		explore(key,maxdistance,metric,root)
 	}
 	/// inserts a key-value pair into the map, returning the previous value at that key, or None if there was no previous value. Keys are considered equal if the the distance between them is 0. If the old value is returned the key is not updated.
 	pub fn insert(&mut self,key:K,value:V)->Option<V> where M:DiscreteMetric<K,K>{
@@ -637,6 +644,6 @@ struct Node<K,V>{connections:BTreeMap<usize,Node<K,V>>,key:K,value:V}
 use {
 	crate::DiscreteMetric,
 	std::{
-		collections::BTreeMap,iter::{Extend,FromIterator},mem::replace
+		collections::BTreeMap,iter::{Extend,FromIterator},mem::replace,ops::{Index,IndexMut}
 	}
 };
