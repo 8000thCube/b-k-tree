@@ -128,7 +128,6 @@ mod tests{
 	struct Cheb2D;
 	use super::*;
 }
-
 #[derive(Clone,Debug)]
 /// a set for quickly finding items separated by a small discrete distance, implemented as a thin wrapper over BKTreeMap
 pub struct BKTreeSet<E,M>{inner:BKTreeMap<E,M,()>}
