@@ -5,7 +5,7 @@ documentation = "https://docs.rs/b_k_tree"
 edition = "2024"
 name = "b-k-tree"
 license = "MIT"
-version = "0.2.0"
+version = "0.3.0"
 repository = "https://github.com/8000thCube/b-k-tree"
 
 [dependencies]
