@@ -324,38 +324,47 @@ impl<K,M,V> BKTreeMap<K,M,V>{//TODO other sterotypical map operations
 	pub fn remove<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Option<(V,usize)> where M:DiscreteMetric<K,K>+DiscreteMetric<K,Q>{self.remove_entry(key,maxdistance).map(|(_k,v,d)|(v,d))}
 	/// removes the closest mapping whose key at most maxdistance from the given key. If there are multiple closest keys, exactly which is removed is unspecified. This particular tree type doesn't allow super efficient removal, so try to avoid using too much.
 	pub fn remove_entry<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Option<(K,V,usize)> where M:DiscreteMetric<K,K>+DiscreteMetric<K,Q>{
-		fn explore<'a,K,M:DiscreteMetric<K,Q>,Q:?Sized,V>(key:&Q,maxdistance:usize,metric:&M,node:&'a mut Node<K,V>)->Option<(Result<(&'a mut BTreeMap<usize,Node<K,V>>,usize),&'a mut Node<K,V>>,usize)>{
-			let distance=metric.distance(&node.key,key);
-
-			let includecurrent=distance<=maxdistance;
-			let (nextnode,d,i)=if let Some(n)=node.connections.range_mut(distance.saturating_sub(maxdistance)..=distance.saturating_add(maxdistance)).filter_map(|(index,n)|{
-				let (node,distance)=explore(key,maxdistance,metric,n)?;
-
-				Some((node,distance,*index))
-			}).min_by_key(|(_n,d,_i)|*d){
-				n
-			}else{
-				return includecurrent.then_some((Err(node),distance))
-			};
-			Some(if distance<d{(Err(node),distance)}else if let Ok((_subtree,subindex))=nextnode{(Ok((&mut node.connections.get_mut(&i).unwrap().connections,subindex)),d)}else{(Ok((&mut node.connections,i)),d)})
-		}
-		fn restore_nodes<K,M:DiscreteMetric<K,K>,V>(nodes:BTreeMap<usize,Node<K,V>>,tree:&mut BKTreeMap<K,M,V>){
-			nodes.into_values().for_each(|n|{
-				let (key,value,next)=(n.key,n.value,n.connections);
-
-				if tree.insert(key,value).is_none(){tree.length-=1}
-				restore_nodes(next,tree);
-			});
+		fn restore_nodes<K,M:DiscreteMetric<K,K>,V>(branch:&mut Node<K,V>,metric:&M,nodes:BTreeMap<usize,Node<K,V>>){
+			nodes.into_iter().for_each(|(_d,n)|{
+				branch.insert(n.key,metric,n.value);
+				restore_nodes(branch,metric,n.connections);
+			})
 		}
 		let metric=&self.metric;
-		let root=self.root.as_mut()?;
-		let (node,distance)=explore(key,maxdistance,metric,root)?;
-		let node=match node{Err(_)=>self.root.take(),Ok((subtree,index))=>subtree.remove(&index)}.unwrap();
-		let (key,value,torestore)=(node.key,node.value,node.connections);
-
+		let mut path=Vec::with_capacity(10);
+		let mut branch=if let Some(r)=&mut self.root{r}else{return None};
+		let nodedistance=branch.get_path(key,maxdistance,metric,&mut path);
+		if nodedistance>maxdistance{return None}
+		let mut path=path.into_iter();
+		let lastindex=path.next_back();
+		for i in path{branch=branch.connections.get_mut(&i).unwrap()}
 		self.length-=1;
-		restore_nodes(torestore,self);
-		Some((key,value,distance))
+		if let Some(i)=lastindex{
+			let node=branch.connections.remove(&i).unwrap();
+			restore_nodes(branch,metric,node.connections);
+			return Some((node.key,node.value,nodedistance))
+		}
+		let mut oldroot=self.root.take().unwrap();
+		if let Some((_d,mut newroot))=oldroot.connections.pop_first(){
+			restore_nodes(&mut newroot,metric,oldroot.connections);
+			self.root=Some(newroot);
+		}
+		Some((oldroot.key,oldroot.value,nodedistance))
+	}
+	/// removes all the mappings for which f returns false
+	pub fn retain<F:FnMut(&K,&mut V)->bool>(&mut self,mut f:F) where M:DiscreteMetric<K,K>{
+		fn explore<F:FnMut(&K,&mut V)->bool,K,M:DiscreteMetric<K,K>,V>(f:&mut F,node:Node<K,V>,tree:&mut BKTreeMap<K,M,V>){
+			let (connections,key)=(node.connections,node.key);
+			let mut value=node.value;
+
+			if f(&key,&mut value){
+				tree.insert(key,value);
+			}
+			for n in connections.into_values(){explore(f,n,tree)}
+		}
+		let root=if let Some(r)=self.root.take(){r}else{return};
+		self.length=0;
+		explore(&mut f,root,self);
 	}
 	/// makes an iterator over the values
 	pub fn values(&self)->ValIter<'_,K,V>{
@@ -406,6 +415,24 @@ impl<K,V> Iterator for MapIntoIter<K,V>{
 	type Item=(K,V);
 }
 impl<K,V> Node<K,V>{
+	/// gets index path to a node, returning the distance. Returns greater than max distance if there is no node within maxdistance
+	fn get_path<M:DiscreteMetric<K,Q>,Q:?Sized>(&self,key:&Q,maxdistance:usize,metric:&M,v:&mut Vec<usize>)->usize{
+		let mut mindistance=metric.distance(&self.key,key);
+		if mindistance==0{return 0}
+		let l0=v.len();
+		for (i,n) in self.connections.range(mindistance.saturating_sub(maxdistance)..=mindistance.saturating_add(maxdistance)){
+			let l1=v.len();
+			v.push(*i);
+			let candidatedistance=n.get_path(key,maxdistance,metric,v);
+			if candidatedistance<=maxdistance&&candidatedistance<mindistance{
+				mindistance=candidatedistance;
+				v.drain(l0..l1);
+			}else{
+				v.truncate(l1);
+			}
+		}
+		mindistance
+	}
 	/// inserts a node in this one using the metric
 	fn insert<M:DiscreteMetric<K,K>>(&mut self,key:K,metric:&M,value:V)->Option<V>{
 		let (mut k,mut v)=(Some(key),Some(value));
@@ -638,7 +665,7 @@ pub struct ValIter<'a,K,V>{inner:MapIter<'a,K,V>}
 #[derive(Debug)]
 /// iterator over the values in the tree
 pub struct ValIterMut<'a,K,V>{inner:MapIterMut<'a,K,V>}
-#[derive(Clone,Debug,Default)]
+#[derive(Clone,Debug)]
 /// tree node
 struct Node<K,V>{connections:BTreeMap<usize,Node<K,V>>,key:K,value:V}
 use {
