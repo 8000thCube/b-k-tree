@@ -54,6 +54,8 @@ impl<E,M> BKTreeSet<E,M>{//TODO other sterotypical set operations
 	pub fn close_iter<Q>(&self,key:Q,maxdistance:usize)->CloseSetIter<'_,E,M,Q> where M:DiscreteMetric<E,Q>{
 		CloseSetIter{inner:self.inner.close_keys(key,maxdistance)}
 	}
+	/// returns the elements at most maxdistance from the key, sorted by distance
+	pub fn close_sorted<'a,Q:?Sized>(&self,key:&Q,maxdistance:usize)->Vec<(&E,usize)> where M:DiscreteMetric<E,Q>{self.inner.close_sorted(key,maxdistance).into_iter().map(|(k,_v,d)|(k,d)).collect()}
 	/// tests if the set contains an element within max distance of the key
 	pub fn contains<Q:?Sized>(&self,key:&Q,maxdistance:usize)->bool where M:DiscreteMetric<E,Q>{self.inner.contains_key(key,maxdistance)}
 	/// returns a reference to the element in the set that is closest to the key within max distance, or None if the set contains no element at most max distance from the given element. If there are multiple closest elements, exactly which is returned is unspecified
@@ -76,6 +78,8 @@ impl<E,M> BKTreeSet<E,M>{//TODO other sterotypical set operations
 	pub fn metric(&self)->&M{self.inner.metric()}
 	/// removes an item from the tree. This particular tree type doesn't allow super efficient removal, so try to avoid using too much.
 	pub fn remove<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->bool where M:DiscreteMetric<E,Q>+DiscreteMetric<E,E>{self.inner.remove_entry(key,maxdistance).is_some()}
+	/// removes all the elements for which f returns false
+	pub fn retain<F:FnMut(&E)->bool>(&mut self,mut f:F) where M:DiscreteMetric<E,E>{self.inner.retain(|k,_v|f(k))}
 	/// removes an item from the tree. This particular tree type doesn't allow super efficient removal, so try to avoid using too much.
 	pub fn take<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Option<(E,usize)> where M:DiscreteMetric<E,Q>+DiscreteMetric<E,E>{self.inner.remove_entry(key,maxdistance).map(|(k,_v,d)|(k,d))}
 }
