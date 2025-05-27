@@ -47,6 +47,12 @@ impl<E,M:Default+DiscreteMetric<E,E>> FromIterator<E> for BKTreeSet<E,M>{
 impl<E,M:DiscreteMetric<E,E>> Extend<E> for BKTreeSet<E,M>{
 	fn extend<I:IntoIterator<Item=E>>(&mut self,iter:I){iter.into_iter().map(|e|self.insert(e)).for_each(|_|())}
 }
+impl<E,M> AsMut<Self> for BKTreeSet<E,M>{
+	fn as_mut(&mut self)->&mut Self{self}
+}
+impl<E,M> AsRef<Self> for BKTreeSet<E,M>{
+	fn as_ref(&self)->&Self{self}
+}
 impl<E,M> BKTreeSet<E,M>{//TODO other sterotypical set operations
 	/// moves all elements from other into self, leaving other empty
 	pub fn append<M2>(&mut self,other:&mut BKTreeSet<E,M2>) where M:DiscreteMetric<E,E>{self.inner.append(&mut other.inner)}
@@ -70,12 +76,12 @@ impl<E,M> BKTreeSet<E,M>{//TODO other sterotypical set operations
 	}
 	/// returns the number of elements in the set
 	pub fn len(&self)->usize{self.inner.len()}
+	/// references the metric. avoid modifying the metric in a way that changes the distances because that will most likely cause unspecified incorrect behavior
+	pub fn metric(&self)->&M{self.inner.metric()}
 	/// creates a new tree
 	pub fn new(metric:M)->Self{
 		Self{inner:BKTreeMap::new(metric)}
 	}
-	/// references the metric. avoid modifying the metric in a way that changes the distances because that will most likely cause unspecified incorrect behavior
-	pub fn metric(&self)->&M{self.inner.metric()}
 	/// removes an item from the tree. This particular tree type doesn't allow super efficient removal, so try to avoid using too much.
 	pub fn remove<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->bool where M:DiscreteMetric<E,Q>+DiscreteMetric<E,E>{self.inner.remove_entry(key,maxdistance).is_some()}
 	/// removes all the elements for which f returns false
@@ -100,6 +106,29 @@ impl<E> Iterator for SetIntoIter<E>{
 }
 #[cfg(test)]
 mod tests{
+	#[test]
+	fn retain_cluster(){
+		let mut tree=BKTreeSet::new(Cheb2D);
+
+		tree.insert((0,0));
+		tree.insert((1,0));
+		tree.insert((0,1));
+		tree.insert((1,1));
+
+		tree.insert((10,10));
+		tree.insert((11,10));
+		tree.insert((10,11));
+		tree.insert((11,11));
+
+		tree.retain(|&(x,y)|x<10&&y<10);
+
+		let mut a:Vec<(isize,isize,usize)>=tree.close_iter((-1,-1),2).map(|((x,y),d)|(*x,*y,d)).collect();
+		let mut b:Vec<(isize,isize,usize)>=tree.close_iter((12,12),2).map(|((x,y),d)|(*x,*y,d)).collect();
+		a.sort_unstable();
+		b.sort_unstable();
+		assert_eq!(a,[(0,0,1),(0,1,2),(1,0,2),(1,1,2)]);
+		assert_eq!(b,[]);
+	}
 	#[test]
 	fn two_clusters(){
 		let mut tree=BKTreeSet::new(Cheb2D);
