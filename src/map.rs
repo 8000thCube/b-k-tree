@@ -181,6 +181,12 @@ impl<K,M:DiscreteMetric<K,Q>,Q,V> Index<&Q> for BKTreeMap<K,M,V>{
 impl<K,M:DiscreteMetric<K,Q>,Q,V> IndexMut<&Q> for BKTreeMap<K,M,V>{
 	fn index_mut(&mut self,index:&Q)->&mut Self::Output{self.get_mut(index,0).map(|(v,_d)|v).expect("mapping must exist to use index")}
 }
+impl<K,M,V> AsMut<Self> for BKTreeMap<K,M,V>{
+	fn as_mut(&mut self)->&mut Self{self}
+}
+impl<K,M,V> AsRef<Self> for BKTreeMap<K,M,V>{
+	fn as_ref(&self)->&Self{self}
+}
 impl<K,M,V> BKTreeMap<K,M,V>{//TODO other sterotypical map operations
 	/// moves all elements from other into self, leaving other empty. If a key from other is already present in self, the respective value from self will be overwritten with the respective value from other
 	pub fn append<M2>(&mut self,other:&mut BKTreeMap<K,M2,V>) where M:DiscreteMetric<K,K>{

@@ -129,8 +129,7 @@ impl<T> Levenshtein<T>{
 		if xl==0{return yl}
 		if yl==0{return xl}
 
-		let mut cache=self.cache.try_lock();
-		let mut distances:Vec<usize>=if let Ok(c)=&mut cache{take(&mut *c)}else{Vec::new()};
+		let mut distances:Vec<usize>=if let Ok(mut c)=self.cache.try_lock(){take(&mut c)}else{Vec::new()};
 
 		distances.clear();
 		distances.reserve(xl);
@@ -148,7 +147,7 @@ impl<T> Levenshtein<T>{
 		}
 		let distance=*distances.last().unwrap();
 
-		if let Ok(c)=&mut cache{**c=distances}
+		if let Ok(mut c)=self.cache.try_lock(){*c=distances}
 		distance
 	}
 	/// creates a new levenshtein distance metric

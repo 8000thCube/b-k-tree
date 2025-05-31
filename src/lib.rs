@@ -1,3 +1,9 @@
+impl<M:?Sized+DiscreteMetric<U,V>,U:?Sized,V:?Sized> DiscreteMetric<U,V> for &M{
+	fn distance(&self,u:&U,v:&V)->usize{(**self).distance(u,v)}
+}
+impl<M:?Sized+DiscreteMetric<U,V>,U:?Sized,V:?Sized> DiscreteMetric<U,V> for &mut M{
+	fn distance(&self,u:&U,v:&V)->usize{(**self).distance(u,v)}
+}
 #[cfg(test)]
 mod tests{
 	#[test]
@@ -12,8 +18,7 @@ mod tests{
 		//  (0,0) at d=0
 		//  (1,1) at d=ceil(√2)=2
 		//  but NOT (2,2) at d=ceil(√8)=3
-		let mut found: Vec<([i32;2], usize)> =
-		tree.close_iter([0, 0], 2).map(|(pt, d)| (*pt, d)).collect();
+		let mut found: Vec<([i32;2], usize)>=tree.close_iter([0, 0], 2).map(|(pt, d)| (*pt, d)).collect();
 		found.sort_unstable();
 		assert_eq!(found, vec![([0, 0], 0),  ([1, 1], 2)]);
 	}
@@ -28,7 +33,7 @@ mod tests{
 		// Hamming("karolin","kathrin") = 3,
 		// Hamming("karolin","kerstin") = 3
 		// radius = 2 should only return self
-		let self_only: Vec<(String, usize)>=tree.close_iter("karolin".to_string(), 2).map(|(s, d)| (s.clone(), d)).collect();
+		let self_only: Vec<(String,usize)>=tree.close_iter("karolin".to_string(), 2).map(|(s, d)| (s.clone(), d)).collect();
 		assert_eq!(self_only, vec![("karolin".to_string(), 0)]);
 
 		// radius = 3 should also pick up both others
