@@ -53,11 +53,39 @@ mod tests{
 		let radius3:Vec<(&String,usize)>=tree.close_sorted("katolin",3);
 		assert_eq!(radius3,vec![(&"karolin".to_string(),1),(&"kathrin".to_string(),2)]);
 	}
-	/*#[test]
-	fn levenshtein_retain(){
+	#[test]
+	fn levenshtein_extend_retain(){
 		let mut tree=BKTreeMap::new(Levenshtein::new());
-
-}*/
+		tree.extend([("bitten","bitten"),("calculate","mathematics"),("cat","pet"),("hello","greeting"),("hi","greeting"),("kat","name"),("kitten","kitten"),("linear","mathematics"),("mittens","mittens"),("sitting","sitting")]);
+		assert_eq!(tree[&"bitten"],"bitten");
+		assert_eq!(tree[&"calculate"],"mathematics");
+		assert_eq!(tree[&"cat"],"pet");
+		assert_eq!(tree[&"hello"],"greeting");
+		assert_eq!(tree[&"hi"],"greeting");
+		assert_eq!(tree[&"kat"],"name");
+		assert_eq!(tree[&"kitten"],"kitten");
+		assert_eq!(tree[&"linear"],"mathematics");
+		assert_eq!(tree[&"mittens"],"mittens");
+		assert_eq!(tree[&"sitting"],"sitting");
+		tree.retain(|k,v|if k==v{
+			false
+		}else{
+			*v=*k;
+			true
+		});
+		assert_eq!(tree[&"calculate"],"calculate");
+		assert_eq!(tree[&"cat"],"cat");
+		assert_eq!(tree[&"hello"],"hello");
+		assert_eq!(tree[&"hi"],"hi");
+		assert_eq!(tree[&"kat"],"kat");
+		assert_eq!(tree[&"linear"],"linear");
+		assert_eq!(tree.get(&"cal",1),Some((&"cat",1)));
+		assert_eq!(tree.get(&"calc",5),Some((&"cat",2)));
+		assert_eq!(tree.get(&"calculat",5),Some((&"calculate",1)));
+		assert_eq!(tree.get(&"hllo",2),Some((&"hello",1)));
+		assert_eq!(tree.get(&"i",3),Some((&"hi",1)));
+		assert_eq!(tree.get(&"line",3),Some((&"linear",2)));
+	}
 	#[test]
 	fn levenshtein_set_close_iter(){
 		let mut tree = BKTreeSet::new(Levenshtein::new());
