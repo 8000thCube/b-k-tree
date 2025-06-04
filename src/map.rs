@@ -22,10 +22,34 @@ impl<'a,K,M:DiscreteMetric<K,Q>,Q,V> Iterator for CloseMapIter<'a,K,M,Q,V>{
 	fn size_hint(&self)->(usize,Option<usize>){(0,Some(self.remaining))}
 	type Item=(&'a K,&'a V,usize);
 }
+impl<'a,K,M:DiscreteMetric<K,Q>,Q,V> Iterator for CloseMapIterMut<'a,K,M,Q,V>{
+	fn next(&mut self)->Option<Self::Item>{
+		let (maxdistance,metric)=(self.maxdistance,self.metric);
+		let key=&self.key;
+		let nodes=&mut self.nodes;
+
+		while let Some(n)=nodes.pop(){
+			let (k,v,next)=(&n.key,&mut n.value,&mut n.connections);
+			let distance=metric.distance(k,key);
+			self.remaining-=1;
+
+			nodes.extend(next.range_mut(distance.saturating_sub(maxdistance)..=distance.saturating_add(maxdistance)).map(|(_r,n)|n));
+			if distance<=maxdistance{return Some((k,v,distance))}
+		}
+		None
+	}
+	fn size_hint(&self)->(usize,Option<usize>){(0,Some(self.remaining))}
+	type Item=(&'a K,&'a mut V,usize);
+}
 impl<'a,K,M:DiscreteMetric<K,Q>,Q,V> Iterator for CloseValIter<'a,K,M,Q,V>{
 	fn next(&mut self)->Option<Self::Item>{self.inner.next().map(|(_k,v,d)|(v,d))}
 	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
 	type Item=(&'a V,usize);
+}
+impl<'a,K,M:DiscreteMetric<K,Q>,Q,V> Iterator for CloseValIterMut<'a,K,M,Q,V>{
+	fn next(&mut self)->Option<Self::Item>{self.inner.next().map(|(_k,v,d)|(v,d))}
+	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
+	type Item=(&'a mut V,usize);
 }
 impl<'a,K,M,Q:Clone,V> Clone for CloseKeyIter<'a,K,M,Q,V>{
 	fn clone(&self)->Self{
@@ -204,16 +228,16 @@ impl<K,M,V> BKTreeMap<K,M,V>{//TODO other sterotypical map operations
 		self.root=None;
 	}
 	/// gets the key value pairs whose distance is at most max distance from key
-	pub fn close_iter<Q>(&self,key:Q,maxdistance:usize)->CloseMapIter<'_,K,M,Q,V> where M:DiscreteMetric<K,Q>{//TODO close iter mut
+	pub fn close_iter<Q>(&self,key:Q,maxdistance:usize)->CloseMapIter<'_,K,M,Q,V> where M:DiscreteMetric<K,Q>{
 		CloseMapIter{key,maxdistance,metric:&self.metric,nodes:self.root.as_ref().into_iter().collect(),remaining:self.length}
+	}
+	/// gets the key value pairs whose distance is at most max distance from key
+	pub fn close_iter_mut<Q>(&mut self,key:Q,maxdistance:usize)->CloseMapIterMut<'_,K,M,Q,V> where M:DiscreteMetric<K,Q>{
+		CloseMapIterMut{key,maxdistance,metric:&self.metric,nodes:self.root.as_mut().into_iter().collect(),remaining:self.length}
 	}
 	/// gets the keys whose distance is at most max distance from key
 	pub fn close_keys<Q>(&self,key:Q,maxdistance:usize)->CloseKeyIter<'_,K,M,Q,V> where M:DiscreteMetric<K,Q>{
 		CloseKeyIter{inner:self.close_iter(key,maxdistance)}
-	}
-	/// gets the values whose keys are at most max distance from key
-	pub fn close_values<Q>(&self,key:Q,maxdistance:usize)->CloseValIter<'_,K,M,Q,V> where M:DiscreteMetric<K,Q>{
-		CloseValIter{inner:self.close_iter(key,maxdistance)}
 	}
 	/// returns the key value pairs at most maxdistance from the key, sorted by distance
 	pub fn close_sorted<'a,Q:?Sized>(&self,key:&Q,maxdistance:usize)->Vec<(&K,&V,usize)> where M:DiscreteMetric<K,Q>{
@@ -246,6 +270,14 @@ impl<K,M,V> BKTreeMap<K,M,V>{//TODO other sterotypical map operations
 		explore(key,maxdistance,metric,root,&mut results);
 		results.sort_unstable_by_key(|(_k,_v,d)|*d);
 		results
+	}
+	/// gets the values whose keys are at most max distance from key
+	pub fn close_values<Q>(&self,key:Q,maxdistance:usize)->CloseValIter<'_,K,M,Q,V> where M:DiscreteMetric<K,Q>{
+		CloseValIter{inner:self.close_iter(key,maxdistance)}
+	}
+	/// gets the values whose keys are at most max distance from key
+	pub fn close_values_mut<Q>(&mut self,key:Q,maxdistance:usize)->CloseValIterMut<'_,K,M,Q,V> where M:DiscreteMetric<K,Q>{
+		CloseValIterMut{inner:self.close_iter_mut(key,maxdistance)}
 	}
 	/// tests if a key at most maxdistance from the given key is in the map
 	pub fn contains_key<Q:?Sized>(&self,key:&Q,maxdistance:usize)->bool where M:DiscreteMetric<K,Q>{self.get_key_value(key,maxdistance).is_some()}
@@ -645,8 +677,14 @@ pub struct CloseKeyIter<'a,K,M,Q,V>{inner:CloseMapIter<'a,K,M,Q,V>}
 /// iterator over mappings close to some key
 pub struct CloseMapIter<'a,K,M,Q,V>{key:Q,maxdistance:usize,metric:&'a M,nodes:Vec<&'a Node<K,V>>,remaining:usize}
 #[derive(Debug)]
+/// iterator over mappings close to some key
+pub struct CloseMapIterMut<'a,K,M,Q,V>{key:Q,maxdistance:usize,metric:&'a M,nodes:Vec<&'a mut Node<K,V>>,remaining:usize}
+#[derive(Debug)]
 /// iterator over values with keys close to some key
 pub struct CloseValIter<'a,K,M,Q,V>{inner:CloseMapIter<'a,K,M,Q,V>}
+#[derive(Debug)]
+/// iterator over values with keys close to some key
+pub struct CloseValIterMut<'a,K,M,Q,V>{inner:CloseMapIterMut<'a,K,M,Q,V>}
 #[derive(Debug)]
 /// iterator over the keys in the tree
 pub struct IntoKeysIter<K,V>{inner:MapIntoIter<K,V>}
