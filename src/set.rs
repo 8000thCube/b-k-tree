@@ -107,6 +107,45 @@ impl<E> Iterator for SetIntoIter<E>{
 #[cfg(test)]
 mod tests{
 	#[test]
+	fn contains_4(){
+		let mut tree=BKTreeSet::new(Cheb2D);
+
+		assert!(tree.insert((3,3)));
+		assert!(tree.contains(&(4,4),1));
+		assert!(tree.insert((3,4)));
+		assert!(tree.insert((3,5)));
+		assert!(tree.insert((4,3)));
+		assert!(tree.insert((4,5)));
+		assert!(tree.contains(&(4,4),1));
+		assert!(tree.insert((5,3)));
+		assert!(tree.insert((5,4)));
+		assert!(tree.insert((5,5)));
+
+		assert!(!tree.contains(&(4,4),0));
+		assert!(tree.contains(&(4,4),1));
+		assert!(tree.contains(&(4,4),2));
+		assert!(tree.contains(&(3,4),0));
+		assert!(tree.contains(&(4,3),0));
+		assert!(tree.contains(&(4,5),0));
+		assert!(tree.contains(&(5,4),0));
+		assert!(!tree.contains(&(5,2),0));
+		assert!(!tree.contains(&(5,6),0));
+		assert!(!tree.contains(&(6,5),0));
+		assert!(tree.contains(&(5,2),1));
+		assert!(tree.contains(&(5,6),1));
+		assert!(tree.contains(&(6,5),1));
+
+		assert_eq!(tree.take(&(5,5),0),Some(((5,5),0)));
+		assert_eq!(tree.take(&(5,3),2),Some(((5,3),0)));
+		assert!(tree.take(&(5,5),1).is_some());
+		assert!(tree.take(&(5,5),1).is_some());
+		assert!(tree.take(&(5,5),1).is_none());
+		assert!(!tree.contains(&(5,5),0));
+		assert!(tree.remove(&(4,4),1));
+		assert!(!tree.contains(&(4,4),0));
+		assert!(tree.contains(&(4,4),1));
+	}
+	#[test]
 	fn retain_cluster(){
 		let mut tree=BKTreeSet::new(Cheb2D);
 
