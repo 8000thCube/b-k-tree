@@ -1,11 +1,13 @@
 [package]
 authors = ["Aili Nierengarten <aili.nierengarten@gmail.com>"]
+categories = ["data-structures"]
 description = "Burkhard-Keller tree data structure for finding items separated by a small discrete distance"
 documentation = "https://docs.rs/b_k_tree"
 edition = "2024"
+keywords = ["bk-tree","bktree","fuzzy","search"]
 name = "b-k-tree"
 license = "MIT"
-version = "0.4.0"
+version = "0.5.0"
 repository = "https://github.com/8000thCube/b-k-tree"
 
 [dependencies]
