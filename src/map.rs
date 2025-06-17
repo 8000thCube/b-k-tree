@@ -404,6 +404,16 @@ impl<K,M,V> BKTreeMap<K,M,V>{//TODO other sterotypical map operations
 		self.length=0;
 		explore(&mut f,root,self);
 	}
+	/// splits off the items close to the key
+	pub fn split_off<Q:?Sized>(&mut self,key:&Q,maxdistance:usize)->Self where M:Clone+DiscreteMetric<K,K>+DiscreteMetric<K,Q>{//TODO when drain make this use it
+		let metric=self.metric.clone();
+		let mut y=Self::new(metric.clone());
+		let x=BKTreeMap{length:self.length,metric,root:self.root.take()};
+
+		self.length=0;
+		x.into_iter().map(|(k,v)|if y.metric.distance(&k,key)<=maxdistance{&mut y}else{&mut *self}.insert(k,v)).for_each(|_|());
+		y
+	}
 	/// makes an iterator over the values
 	pub fn values(&self)->ValIter<'_,K,V>{
 		ValIter{inner:self.iter()}
