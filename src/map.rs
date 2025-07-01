@@ -33,7 +33,7 @@ impl<'a,K,M:DiscreteMetric<K,Q>,Q,V> Iterator for CloseMapIterMut<'a,K,M,Q,V>{
 			let distance=metric.distance(k,key);
 			self.remaining-=1;
 
-			nodes.extend(next.range_mut(distance.saturating_sub(maxdistance)..=distance.saturating_add(maxdistance)).map(|(_r,n)|n));
+			nodes.extend(next.range_mut(distance.saturating_sub(maxdistance)..=distance.saturating_add(maxdistance)).map(|(_r,n)|n));//TODO remaining can have a tighter bound by subtracting one for every node not examined here, or the number of total sub nodes if that becomes tracked
 			if distance<=maxdistance{return Some((k,v,distance))}
 		}
 		None
@@ -463,6 +463,13 @@ impl<K,V> Iterator for MapIntoIter<K,V>{
 	type Item=(K,V);
 }
 impl<K,V> Node<K,V>{
+	/*/// recursive depth first search of the items within maxdistance
+	fn bkdfs<B,F:FnMut(&Node<K,V>,usize)->ControlFlow<B>,M:DiscreteMetric<K,Q>,Q:?Sized>(&self,behavior:&mut F,key:&Q,maxdistance:usize,metric:&M)->ControlFlow<B>{
+		let distance=metric.distance(&self.key,key);
+		if distance<=maxdistance{behavior(self,distance)?}
+		self.connections.range(distance.saturating_sub(maxdistance)..=distance.saturating_add(maxdistance)).try_for_each(|(_r,n)|n.bkdfs(&mut *behavior,key,maxdistance,metric))?;
+		ControlFlow::Continue(())
+	}*/
 	/// gets index path to a node, returning the distance. Returns greater than max distance if there is no node within maxdistance
 	fn get_path<M:DiscreteMetric<K,Q>,Q:?Sized>(&self,key:&Q,maxdistance:usize,metric:&M,v:&mut Vec<usize>)->usize{
 		let mut mindistance=metric.distance(&self.key,key);
@@ -482,14 +489,16 @@ impl<K,V> Node<K,V>{
 		mindistance
 	}
 	/// inserts a node in this one using the metric
-	fn insert<M:DiscreteMetric<K,K>>(&mut self,key:K,metric:&M,value:V)->Option<V>{
-		let (mut k,mut v)=(Some(key),Some(value));
+	fn insert<M:DiscreteMetric<K,K>>(&mut self,key:K,metric:&M,value:V)->Option<V>{self.insert_existing(metric,Node::new(key,value))}
+	/// inserts a node in this one using the metric
+	fn insert_existing<M:DiscreteMetric<K,K>>(&mut self,metric:&M,node:Node<K,V>)->Option<V>{
+		let mut n=Some(node);
 		let mut node=self;
 
 		loop{
-			let distance=if let Some(k)=&k{metric.distance(k,&node.key)}else{break};
-			if distance==0{return Some(replace(&mut node.value,v.unwrap()))}
-			node=node.connections.entry(distance).or_insert_with(||Node::new(k.take().unwrap(),v.take().unwrap()));
+			let distance=if let Some(n)=&n{metric.distance(&n.key,&node.key)}else{break};
+			if distance==0{return Some(replace(&mut node.value,n.unwrap().value))}
+			node=node.connections.entry(distance).or_insert_with(||n.take().unwrap());
 		}
 		None
 	}
@@ -696,6 +705,66 @@ pub struct CloseValIter<'a,K,M,Q,V>{inner:CloseMapIter<'a,K,M,Q,V>}
 /// iterator over values with keys close to some key
 pub struct CloseValIterMut<'a,K,M,Q,V>{inner:CloseMapIterMut<'a,K,M,Q,V>}
 #[derive(Debug)]
+/// iterator that removes mappings close to a key
+pub struct DrainMapIter<'a,K,M:DiscreteMetric<K,K>+DiscreteMetric<K,Q>,Q,V>{key:Q,maxdistance:usize,maplen:&'a mut usize,matches:Vec<(Node<K,V>,usize)>,metric:&'a M,nodes:Vec<(Option<&'a mut Node<K,V>>,usize)>}
+
+impl<'a,K,M:DiscreteMetric<K,K>+DiscreteMetric<K,Q>,Q,V> Drop for DrainMapIter<'a,K,M,Q,V>{
+	fn drop(&mut self){self.for_each(|_|())}
+}
+impl<'a,K,M:DiscreteMetric<K,K>+DiscreteMetric<K,Q>,Q,V> Iterator for DrainMapIter<'a,K,M,Q,V>{//TODO finish and test
+	fn next(&mut self)->Option<Self::Item>{
+		fn explore<'a,K,M:DiscreteMetric<K,K>+DiscreteMetric<K,Q>,Q,V>(insertionindex:usize,insertionnode:&mut Node<K,V>,key:&Q,matches:&mut Vec<(Node<K,V>,usize)>,mut matchesstart:usize,maxdistance:usize,metric:&'a M,nodes:&mut Vec<(Option<&'a mut Node<K,V>>,usize)>){
+			while matchesstart<matches.len(){
+				take(&mut matches[matchesstart].0.connections).into_values().for_each(|n|{
+					let distance=metric.distance(&n.key,key);
+					if distance<=maxdistance{
+						matches.push((n,distance));
+					}else{
+						if let Some(node)=insertionnode.connections.get_mut(&insertionindex){
+							node.insert_existing(metric,n);
+						}else{
+							insertionnode.connections.insert(insertionindex,n);
+						}
+						nodes.push((None,distance));
+					}
+				});
+				matchesstart+=1;
+			}
+		}
+		let (maxdistance,metric)=(self.maxdistance,self.metric);
+		let (maplen,matches,nodes)=(&mut self.maplen,&mut self.matches,&mut self.nodes);
+		let key=&self.key;
+
+		if let Some((node,distance))=matches.pop(){
+			**maplen-=1;
+			return Some((node.key,node.value,distance))
+		}
+		while let Some((Some(node),distance))=nodes.pop(){
+			let candidaterange=distance.saturating_sub(maxdistance)..=distance.saturating_add(maxdistance);
+			let mut d=0;
+			let start=nodes.len();
+
+			take(&mut node.connections).into_iter().for_each(|(r,n)|if candidaterange.contains(&r)&&{
+				d=metric.distance(&n.key,key);
+				let remove=d<=maxdistance;
+				if !remove{nodes.push((None,d))}
+				remove
+			}{
+				matches.push((n,d));
+				explore(r,&mut *node,key,matches,matches.len()-1,maxdistance,metric,&mut *nodes);
+			}else{
+				node.connections.insert(r,n);
+			});
+			node.connections.range_mut(candidaterange).zip(nodes[start..].iter_mut()).for_each(|((_r,n),(node,_d))|*node=Some(n));
+			if let Some((n,d))=matches.pop(){return Some((n.key,n.value,d))}
+		}
+		None
+	}
+	fn size_hint(&self)->(usize,Option<usize>){(self.matches.len(),Some(*self.maplen))}
+	type Item=(K,V,usize);
+}
+
+#[derive(Debug)]
 /// iterator over the keys in the tree
 pub struct IntoKeysIter<K,V>{inner:MapIntoIter<K,V>}
 #[derive(Debug)]
@@ -725,6 +794,6 @@ struct Node<K,V>{connections:BTreeMap<usize,Node<K,V>>,key:K,value:V}
 use {
 	crate::DiscreteMetric,
 	std::{
-		collections::BTreeMap,iter::{Extend,FromIterator},mem::replace,ops::{Index,IndexMut}
+		collections::BTreeMap,iter::{Extend,FromIterator},mem::{replace,take},ops::{Index,IndexMut}
 	}
 };
