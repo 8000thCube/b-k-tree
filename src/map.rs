@@ -281,6 +281,30 @@ impl<K,M,V> BKTreeMap<K,M,V>{//TODO other sterotypical map operations
 	}
 	/// tests if a key at most maxdistance from the given key is in the map
 	pub fn contains_key<Q:?Sized>(&self,key:&Q,maxdistance:usize)->bool where M:DiscreteMetric<K,Q>{self.get_key_value(key,maxdistance).is_some()}
+	/// drains the values close to the key
+	pub fn drain<Q>(&mut self,key:Q,maxdistance:usize)->DrainMapIter<'_,K,M,Q,V> where M:DiscreteMetric<K,K>+DiscreteMetric<K,Q>{
+		let (matches,nodes)=if self.root.as_ref().map(|r|self.metric.distance(&r.key,&key)<=maxdistance).unwrap_or(true){
+			let mut matches:Vec<(K,V,usize)>=MapIntoIter{nodes:self.root.take().into_iter().collect(),remaining:self.length}.map(|(k,v)|{
+				let d=self.metric.distance(&k,&key);
+				(k,v,d)
+			}).collect();
+			self.length=0;
+			self.extend(matches.extract_if(..,|(_k,_v,d)|*d>maxdistance).map(|(k,v,_d)|(k,v)));
+			let matches=matches.into_iter().map(|(k,v,d)|(Node::new(k,v),d)).collect();
+			let nodes=Vec::new();
+			(matches,nodes)
+		}else{
+			let matches=Vec::new();
+			let nodes=self.root.as_mut().into_iter().map(|n|{
+				let d=self.metric.distance(&n.key,&key);
+				(Some(n),d)
+			}).collect();
+			(matches,nodes)
+		};
+		let maplen=&mut self.length;
+		let metric=&self.metric;
+		DrainMapIter{key,maxdistance,maplen,matches,metric,nodes}
+	}
 	/// gets the value whose key is closest to the given key, or None if the map contains no key at most max distance from the given key. If there are multiple closest keys, exactly which is returned is unspecified
 	pub fn get<Q:?Sized>(&self,key:&Q,maxdistance:usize)->Option<(&V,usize)> where M:DiscreteMetric<K,Q>{self.get_key_value(key,maxdistance).map(|(_k,v,d)|(v,d))}
 	/// gets the key value pair and distance whose key is closest to the given key, or None if the map contains no key at most max distance from the given key. If there are multiple closest keys, exactly which is returned is unspecified
