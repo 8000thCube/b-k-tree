@@ -1,3 +1,8 @@
+impl<'a,E,M:DiscreteMetric<E,E>+DiscreteMetric<E,Q>,Q> Iterator for DrainSetIter<'a,E,M,Q>{
+	fn next(&mut self)->Option<Self::Item>{self.inner.next().map(|(k,_v,d)|(k,d))}
+	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
+	type Item=(E,usize);
+}
 impl<'a,E,M:DiscreteMetric<E,Q>,Q> Iterator for CloseSetIter<'a,E,M,Q>{
 	fn next(&mut self)->Option<Self::Item>{self.inner.next()}
 	fn size_hint(&self)->(usize,Option<usize>){self.inner.size_hint()}
@@ -64,6 +69,10 @@ impl<E,M> BKTreeSet<E,M>{//TODO other sterotypical set operations
 	pub fn close_sorted<'a,Q:?Sized>(&self,key:&Q,maxdistance:usize)->Vec<(&E,usize)> where M:DiscreteMetric<E,Q>{self.inner.close_sorted(key,maxdistance).into_iter().map(|(k,_v,d)|(k,d)).collect()}
 	/// tests if the set contains an element within max distance of the key
 	pub fn contains<Q:?Sized>(&self,key:&Q,maxdistance:usize)->bool where M:DiscreteMetric<E,Q>{self.inner.contains_key(key,maxdistance)}
+	/// drains the elements close to the key
+	pub fn drain<Q>(&mut self,key:Q,maxdistance:usize)->DrainSetIter<'_,E,M,Q> where M:DiscreteMetric<E,E>+DiscreteMetric<E,Q>{
+		DrainSetIter{inner:self.inner.drain(key,maxdistance)}
+	}
 	/// returns a reference to the element in the set that is closest to the key within max distance, or None if the set contains no element at most max distance from the given element. If there are multiple closest elements, exactly which is returned is unspecified
 	pub fn get<Q:?Sized>(&self,key:&Q,maxdistance:usize)->Option<(&E,usize)> where M:DiscreteMetric<E,Q>{self.inner.get_key_value(key,maxdistance).map(|(k,_v,d)|(k,d))}
 	/// inserts
@@ -207,6 +216,9 @@ pub struct BKTreeSet<E,M>{inner:BKTreeMap<E,M,()>}
 /// iterator over the items close to some key
 pub struct CloseSetIter<'a,E,M,Q>{inner:CloseKeyIter<'a,E,M,Q,()>}
 #[derive(Debug)]
+/// draining iterator over the set
+pub struct DrainSetIter<'a,E,M:DiscreteMetric<E,E>+DiscreteMetric<E,Q>,Q>{inner:DrainMapIter<'a,E,M,Q,()>}
+#[derive(Debug)]
 /// iterator over the items in the tree
 pub struct SetIntoIter<E>{inner:IntoKeysIter<E,()>}
 #[derive(Debug)]
@@ -214,7 +226,7 @@ pub struct SetIntoIter<E>{inner:IntoKeysIter<E,()>}
 pub struct SetIter<'a,E>{inner:KeyIter<'a,E,()>}
 use {
 	crate::{
-		DiscreteMetric,map::{BKTreeMap,CloseKeyIter,IntoKeysIter,KeyIter}
+		DiscreteMetric,map::{BKTreeMap,CloseKeyIter,DrainMapIter,IntoKeysIter,KeyIter}
 	},
 	std::iter::{Extend,FromIterator}
 };
